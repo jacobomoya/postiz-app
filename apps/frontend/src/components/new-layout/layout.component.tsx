@@ -42,6 +42,7 @@ import { PreConditionComponent } from '@gitroom/frontend/components/layout/pre-c
 import { AttachToFeedbackIcon } from '@gitroom/frontend/components/new-layout/sentry.feedback.component';
 import { FirstBillingComponent } from '@gitroom/frontend/components/billing/first.billing.component';
 import { TrialTracker } from '@gitroom/frontend/components/layout/gtm.component';
+import { OrganizationCache } from '@gitroom/frontend/components/layout/organization.cache';
 import { setSentryUser } from '@gitroom/react/sentry/initialize.sentry.client';
 
 const jakartaSans = Plus_Jakarta_Sans({
@@ -83,6 +84,7 @@ export const LayoutComponent = ({ children }: { children: ReactNode }) => {
 
   return (
     <ContextWrapper user={user}>
+      <OrganizationCache key={user.orgId}>
       <CopilotKit
         credentials="include"
         runtimeUrl={backendUrl + '/copilot/chat'}
@@ -94,13 +96,15 @@ export const LayoutComponent = ({ children }: { children: ReactNode }) => {
           <Toaster />
           <TrialTracker />
           <CheckPayment check={searchParams.get('check') || ''} mutate={mutate}>
-            <ShowMediaBoxModal />
-            <ShowLinkedinCompany />
-            <MediaSettingsLayout />
-            <ShowPostSelector />
-            <PreConditionComponent />
-            <NewSubscription />
-            <ContinueProvider />
+            <React.Fragment key={user.orgId}>
+              <ShowMediaBoxModal />
+              <ShowLinkedinCompany />
+              <MediaSettingsLayout />
+              <ShowPostSelector />
+              <PreConditionComponent />
+              <NewSubscription />
+              <ContinueProvider />
+            </React.Fragment>
             <div
               className={clsx(
                 'flex flex-col min-h-screen min-w-screen text-newTextColor p-[12px] mobile:p-[8px] mobile:pb-[80px]',
@@ -139,6 +143,14 @@ export const LayoutComponent = ({ children }: { children: ReactNode }) => {
                           <div className="flex justify-center">
                             <Logo />
                           </div>
+                          {menuOpen && (
+                            <div
+                              className="hidden mobile:flex p-[8px] rounded-[8px] text-textItemBlur hover:bg-boxFocused"
+                              onClick={(event) => event.stopPropagation()}
+                            >
+                              <OrganizationSelector />
+                            </div>
+                          )}
                           <TopMenu />
                         </div>
                       </div>
@@ -169,7 +181,7 @@ export const LayoutComponent = ({ children }: { children: ReactNode }) => {
                           <Title />
                         </div>
                         <div className="flex gap-[20px] mobile:gap-[14px] mobile:items-center text-textItemBlur">
-                          <StreakComponent />
+                          <StreakComponent key={user.orgId} />
                           <div className="w-[1px] h-[20px] bg-blockSeparator mobile:hidden" />
                           <OrganizationSelector />
                           <div className="hover:text-newTextColor">
@@ -184,10 +196,10 @@ export const LayoutComponent = ({ children }: { children: ReactNode }) => {
                           <div className="contents mobile:hidden">
                             <AttachToFeedbackIcon />
                           </div>
-                          <NotificationComponent />
+                          <NotificationComponent key={user.orgId} />
                         </div>
                       </div>
-                      <div className="flex flex-1 min-w-0 gap-[1px] mobile:flex-col">
+                      <div key={user.orgId} className="flex flex-1 min-w-0 gap-[1px] mobile:flex-col">
                         {children}
                       </div>
                     </div>
@@ -198,6 +210,7 @@ export const LayoutComponent = ({ children }: { children: ReactNode }) => {
           </CheckPayment>
         </MantineWrapper>
       </CopilotKit>
+      </OrganizationCache>
     </ContextWrapper>
   );
 };
