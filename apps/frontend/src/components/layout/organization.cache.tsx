@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, ReactNode, useCallback, useContext, useEffect } from 'react';
-import { SWRConfig, useSWRConfig } from 'swr';
+import { Cache, SWRConfig, useSWRConfig } from 'swr';
 
 // /user/self belongs to the application cache, not the disposable org cache.
 export const OrganizationUserMutate = createContext<ReturnType<typeof useSWRConfig>['mutate'] | undefined>(undefined);
@@ -13,7 +13,7 @@ export const useRootUserMutate = () => {
   return useCallback(() => mutateUser('/user/self'), [mutateUser]);
 };
 
-const RefreshOrganizations = () => {
+const RefreshOrganizations = (): null => {
   const { mutate } = useSWRConfig();
   useEffect(() => {
     // Use the newly mounted cache, never the discarded provider's mutate.
@@ -26,7 +26,7 @@ export const OrganizationCache = ({ children }: { children: ReactNode }) => {
   const { mutate } = useSWRConfig();
   return (
     <OrganizationUserMutate.Provider value={mutate}>
-      <SWRConfig value={{ provider: () => new Map() }}>
+      <SWRConfig value={{ provider: (): Cache => new Map() as Cache }}>
         {children}
         <RefreshOrganizations />
       </SWRConfig>
