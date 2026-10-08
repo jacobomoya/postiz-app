@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import { useSWRConfig } from 'swr';
+import { useRootUserMutate } from '../layout/organization.cache';
 import { useUser } from '../layout/user.context';
 import copy from 'copy-to-clipboard';
 import { useToaster } from '@gitroom/react/toaster/toaster';
@@ -730,7 +730,7 @@ const PublicApiContent = () => {
   const toaster = useToaster();
   const fetch = useFetch();
   const decision = useDecisionModal();
-  const { mutate } = useSWRConfig();
+  const mutateRootUser = useRootUserMutate();
   const [reveal, setReveal] = useState(false);
   const t = useT();
 
@@ -746,13 +746,13 @@ const PublicApiContent = () => {
     });
     if (!approved) return;
     await fetch('/user/api-key/rotate', { method: 'POST' });
-    await mutate('/user/self');
+    await mutateRootUser();
     setReveal(false);
     toaster.show(
       t('api_key_rotated', 'API Key rotated successfully'),
       'success'
     );
-  }, [decision, fetch, mutate, toaster]);
+  }, [decision, fetch, mutateRootUser, toaster]);
 
   if (!user || !user.publicApi) {
     return null;
