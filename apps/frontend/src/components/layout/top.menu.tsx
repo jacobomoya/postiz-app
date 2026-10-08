@@ -118,6 +118,20 @@ export const useMenuItem = () => {
 
   const secondMenu = [
     {
+      name: t('company_overview', 'Company overview'),
+      path: '/overview',
+      icon: (
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path
+            d="M3 3H10V10H3V3ZM14 3H21V10H14V3ZM3 14H10V21H3V14ZM14 14H21V21H14V14Z"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinejoin="round"
+          />
+        </svg>
+      ),
+    },
+    {
       name: t('make_ugc', 'Make UGC'),
       icon: (
         <svg
