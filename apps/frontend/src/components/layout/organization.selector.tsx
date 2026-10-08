@@ -7,6 +7,8 @@ import useSWR from 'swr';
 import { useUser } from '@gitroom/frontend/components/layout/user.context';
 import clsx from 'clsx';
 import { useOrganizationSwitch } from './use.organization.switch';
+type Organization = { name: string; id: string; users?: { role: string }[] };
+
 export const OrganizationSelector: FC<{ asOpenSelect?: boolean }> = ({
   asOpenSelect,
 }) => {
@@ -16,6 +18,10 @@ export const OrganizationSelector: FC<{ asOpenSelect?: boolean }> = ({
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState(false);
+  const [query, setQuery] = useState('');
+  const [highlighted, setHighlighted] = useState(0);
+  const search = useRef<HTMLInputElement>(null);
+  const optionButtons = useRef<(HTMLButtonElement | null)[]>([]);
   const inFlight = useRef(false);
   const trigger = useRef<HTMLButtonElement>(null);
   const menu = useRef<HTMLDivElement>(null);
@@ -54,10 +60,10 @@ export const OrganizationSelector: FC<{ asOpenSelect?: boolean }> = ({
     const timeout = window.setTimeout(() => setError(false), 4000);
     return () => window.clearTimeout(timeout);
   }, [error]);
-  const load = useCallback(async () => {
+  const load = useCallback(async (): Promise<Organization[]> => {
     return await (await fetch('/user/organizations')).json();
   }, [fetch]);
-  const { isLoading, data } = useSWR('/user/organizations', load, {
+  const { isLoading, data } = useSWR<Organization[]>('/user/organizations', load, {
     revalidateIfStale: false,
     revalidateOnFocus: false,
     refreshWhenOffline: false,
@@ -65,13 +71,23 @@ export const OrganizationSelector: FC<{ asOpenSelect?: boolean }> = ({
     revalidateOnReconnect: false,
   });
   const current = useMemo(() => {
-    return data?.find((d: any) => d.id === user?.orgId);
+    return data?.find((d) => d.id === user?.orgId);
   }, [data, user?.orgId]);
+  const searchable = (data?.length ?? 0) > 8;
+  const normalizedQuery = searchable ? query.toLowerCase() : '';
   const withoutCurrent = useMemo(() => {
-    return data?.filter((d: any) => d.id !== user?.orgId);
-  }, [data, user?.orgId]);
+    return data?.filter((org) => org.id !== user?.orgId && org.name.toLowerCase().includes(normalizedQuery)) ?? [];
+  }, [data, user?.orgId, normalizedQuery]);
+  const visible = open || !!asOpenSelect;
+  useEffect(() => {
+    if (!visible) return;
+    setQuery('');
+    setHighlighted(0);
+    if (searchable) search.current?.focus();
+    else optionButtons.current[0]?.focus();
+  }, [visible, searchable]);
   const changeOrg = useCallback(
-    (org: { name: string; id: string }) => async () => {
+    (org: Organization) => async () => {
       if (inFlight.current) return;
       inFlight.current = true;
       setPending(true);
@@ -91,24 +107,59 @@ export const OrganizationSelector: FC<{ asOpenSelect?: boolean }> = ({
   if (isLoading || !data || data.length <= 1) {
     return null;
   }
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.nativeEvent.isComposing || pending) return;
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      if (!withoutCurrent.length) return;
+      const next = (highlighted + (event.key === 'ArrowDown' ? 1 : -1) + withoutCurrent.length) % withoutCurrent.length;
+      setHighlighted(next);
+      if (document.activeElement !== search.current) optionButtons.current[next]?.focus();
+      optionButtons.current[next]?.scrollIntoView?.({ block: 'nearest' });
+    } else if (event.key === 'Enter') {
+      event.preventDefault();
+      const org = withoutCurrent[highlighted];
+      if (org) void changeOrg(org)();
+    }
+  };
   const options = (
     <div
       ref={menu}
       aria-label="Organizations"
       aria-busy={pending}
+      onKeyDown={handleKeyDown}
       style={asOpenSelect ? undefined : position}
       className={clsx(
         'flex p-[12px] bg-third text-newTextColor text-[12px] border-tableBorder border gap-[12px] flex-col',
         asOpenSelect ? 'relative max-w-[500px] mx-auto mb-[10px]' : 'fixed z-[1000] w-[280px] max-w-[calc(100vw-16px)] max-h-[50vh] overflow-y-auto'
       )}
     >
-      {withoutCurrent?.map((org: { name: string; id: string; users?: { role: string }[] }) => (
+      {searchable && (
+        <input
+          ref={search}
+          type="search"
+          aria-label="Search organizations"
+          placeholder="Search organizations"
+          value={query}
+          onChange={(event: React.ChangeEvent<HTMLInputElement>) => {
+            setQuery(event.target.value);
+            setHighlighted(0);
+          }}
+          className="w-full rounded border border-tableBorder bg-third p-[8px]"
+        />
+      )}
+      {current && current.name.toLowerCase().includes(normalizedQuery) && (
+        <div aria-current="true" className="rounded bg-btnPrimary p-[4px] font-semibold truncate">{current.name}</div>
+      )}
+      {withoutCurrent.map((org, index) => (
         <button
           type="button"
           key={org.id}
+          ref={(element: HTMLButtonElement | null) => { optionButtons.current[index] = element; }}
+          onFocus={() => setHighlighted(index)}
           onClick={changeOrg(org)}
           disabled={pending}
-          className="text-start whitespace-nowrap truncate disabled:opacity-50 disabled:cursor-wait"
+          className={clsx('text-start whitespace-nowrap truncate disabled:opacity-50 disabled:cursor-wait', highlighted === index && 'bg-tableBorder rounded outline outline-1 outline-current')}
         >
           {org.name}
           {!!org.users?.[0]?.role && (
