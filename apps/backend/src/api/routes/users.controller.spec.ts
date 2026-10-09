@@ -1,4 +1,4 @@
-import { ForbiddenException } from '@nestjs/common';
+import { ForbiddenException, ValidationPipe } from '@nestjs/common';
 import { Response } from 'express';
 import { User } from '@prisma/client';
 import { UsersController } from './users.controller';
@@ -20,6 +20,39 @@ jest.mock('@gitroom/nestjs-libraries/database/prisma/users/users.service', () =>
 jest.mock('@gitroom/nestjs-libraries/track/track.service', () => ({}));
 // The custom forbidden filter imports middleware with infrastructure dependencies.
 jest.mock('@gitroom/nestjs-libraries/services/exception.filter', () => ({}));
+
+describe('Create organization', () => {
+  const createOrgForUser = jest.fn();
+  const controller = new UsersController(
+    undefined!, undefined!, undefined!,
+    { createOrgForUser } as unknown as OrganizationService,
+    undefined!, undefined!, undefined!
+  );
+  const create = async (name: unknown) => {
+    const method = controller.createOrganization;
+    const types = Reflect.getMetadata('design:paramtypes', controller, 'createOrganization');
+    const body = await new ValidationPipe({ transform: true }).transform(
+      { name }, { type: 'body', metatype: types?.[1] }
+    );
+    return method.call(controller, { id: 'existing-user' } as User, body);
+  };
+
+  beforeEach(() => {
+    createOrgForUser.mockReset().mockResolvedValue({ id: 'new-org', name: 'Company' });
+  });
+
+  it('creates for the authenticated existing user and returns only id and name', async () => {
+    await expect(create('  Company  ')).resolves.toEqual({ id: 'new-org', name: 'Company' });
+    expect(createOrgForUser).toHaveBeenCalledWith('existing-user', 'Company');
+    expect(Reflect.getMetadata('path', controller.createOrganization)).toBe('/organizations');
+    expect(Reflect.getMetadata('method', controller.createOrganization)).toBe(1);
+  });
+
+  it.each(['', '   ', 'x'.repeat(61), null, 42])('rejects invalid names (%j) with 400', async (name) => {
+    await expect(create(name)).rejects.toMatchObject({ status: 400 });
+    expect(createOrgForUser).not.toHaveBeenCalled();
+  });
+});
 
 describe('Organizations overview', () => {
   const user = { id: 'current-user' } as User;

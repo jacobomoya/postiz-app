@@ -8,7 +8,10 @@ import {
   Query,
   Req,
   Res,
+  ValidationPipe,
 } from '@nestjs/common';
+import { Transform } from 'class-transformer';
+import { IsNotEmpty, IsString, MaxLength } from 'class-validator';
 import { GetUserFromRequest } from '@gitroom/nestjs-libraries/user/user.from.request';
 import { sign } from 'jsonwebtoken';
 import { Organization, User } from '@prisma/client';
@@ -37,6 +40,14 @@ import {
   AuthorizationActions,
   Sections,
 } from '@gitroom/backend/services/auth/permissions/permission.exception.class';
+
+export class CreateOrganizationDto {
+  @Transform(({ value }) => typeof value === 'string' ? value.trim() : value)
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(60)
+  name!: string;
+}
 
 @ApiTags('User')
 @Controller('/user')
@@ -297,6 +308,14 @@ export class UsersController {
     response.status(200).json({
       id: typeof addedOrg !== 'boolean' ? addedOrg.organizationId : null,
     });
+  }
+
+  @Post('/organizations')
+  async createOrganization(
+    @GetUserFromRequest() user: User,
+    @Body(new ValidationPipe({ transform: true })) body: CreateOrganizationDto
+  ) {
+    return this._orgService.createOrgForUser(user.id, body.name);
   }
 
   @Get('/organizations/overview')

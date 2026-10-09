@@ -150,9 +150,74 @@ test.each(['http', 'network'])('shows an error without reload and allows retry a
   await waitFor(() => expect(mockCloseAll).toHaveBeenCalledTimes(1));
 });
 
-test.each([0, 1])('renders nothing for %i organizations', (count) => {
+test.each([0])('renders nothing for %i organizations', (count) => {
   mockData = mockData.slice(0, count);
   expect(render(<OrganizationSelector />).container.innerHTML).toBe('');
+});
+
+test('makes creation reachable with one organization', () => {
+  organizations(1);
+  render(<OrganizationSelector />);
+  open();
+  expect(screen.getByRole('button', { name: '+ Create company' })).toBeTruthy();
+});
+
+const startCreation = () => {
+  open();
+  fireEvent.click(screen.getByRole('button', { name: '+ Create company' }));
+  fireEvent.change(screen.getByRole('textbox', { name: 'Company name' }), { target: { value: '  New company  ' } });
+};
+
+test('creates once while pending then switches using the authoritative flow', async () => {
+  let resolve!: (response: any) => void;
+  mockFetch.mockReturnValueOnce(new Promise((done) => { resolve = done; }));
+  render(<OrganizationSelector />);
+  startCreation();
+  const submit = screen.getByRole('button', { name: 'Create' });
+  fireEvent.click(submit);
+  fireEvent.click(submit);
+  expect(mockFetch).toHaveBeenCalledTimes(1);
+  expect(mockFetch).toHaveBeenCalledWith('/user/organizations', { method: 'POST', body: JSON.stringify({ name: 'New company' }) });
+  await act(async () => resolve({ ok: true, json: async () => ({ id: 'b', name: 'New company' }) }));
+  await waitFor(() => expect(mockCloseAll).toHaveBeenCalledTimes(1));
+  expect(mockFetch).toHaveBeenNthCalledWith(2, '/user/change-org', { method: 'POST', body: JSON.stringify({ id: 'b' }) });
+  expect(mockMutate).toHaveBeenCalledWith('/user/self', expect.any(Function), { revalidate: false });
+});
+
+test.each(['http', 'network'])('shows creation errors without switching after %s failure', async (failure) => {
+  if (failure === 'http') mockFetch.mockResolvedValueOnce({ ok: false });
+  else mockFetch.mockRejectedValueOnce(new Error('Offline'));
+  render(<OrganizationSelector />);
+  startCreation();
+  fireEvent.click(screen.getByRole('button', { name: 'Create' }));
+  expect(await screen.findByRole('alert')).toBeTruthy();
+  expect(mockFetch).toHaveBeenCalledTimes(1);
+  expect(mockCloseAll).not.toHaveBeenCalled();
+});
+
+test('retries switching without creating a duplicate company', async () => {
+  mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'b', name: 'New company' }) });
+  mockFetch.mockResolvedValueOnce({ ok: false });
+  render(<OrganizationSelector />);
+  startCreation();
+  fireEvent.click(screen.getByRole('button', { name: 'Create' }));
+  await screen.findByRole('alert');
+  fireEvent.click(screen.getByRole('button', { name: 'Retry switch' }));
+  await waitFor(() => expect(mockCloseAll).toHaveBeenCalledTimes(1));
+  expect(mockFetch.mock.calls.filter(([path]) => path === '/user/organizations')).toHaveLength(1);
+});
+
+test('keeps form keyboard input separate from switching and allows cancel', () => {
+  render(<OrganizationSelector />);
+  startCreation();
+  const input = screen.getByRole('textbox', { name: 'Company name' });
+  fireEvent.keyDown(input, { key: 'Enter' });
+  expect(mockFetch).not.toHaveBeenCalled();
+  fireEvent.change(input, { target: { value: '   ' } });
+  expect((screen.getByRole('button', { name: 'Create' }) as HTMLButtonElement).disabled).toBe(true);
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+  expect(screen.queryByRole('textbox')).toBeNull();
+  expect(screen.getByRole('button', { name: '+ Create company' })).toBeTruthy();
 });
 
 test('renders nothing while loading', () => {

@@ -458,6 +458,24 @@ export class OrganizationRepository {
     return create;
   }
 
+  createOrgForUser(userId: string, name: string) {
+    return this._organization.model.organization.create({
+      data: {
+        name,
+        apiKey: AuthService.fixedEncryption(makeSecureId(20)),
+        allowTrial: true,
+        isTrailing: true,
+        users: {
+          create: {
+            role: Role.SUPERADMIN,
+            user: { connect: { id: userId } },
+          },
+        },
+      },
+      select: { id: true, name: true },
+    });
+  }
+
   async createOrgAndUser(
     body: Omit<CreateOrgUserDto, 'providerToken'> & { providerId?: string },
     hasEmail: boolean,

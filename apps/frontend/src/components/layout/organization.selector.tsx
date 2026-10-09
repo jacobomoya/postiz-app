@@ -18,6 +18,9 @@ export const OrganizationSelector: FC<{ asOpenSelect?: boolean }> = ({
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [name, setName] = useState('');
+  const createdOrganization = useRef<Organization | null>(null);
   const [query, setQuery] = useState('');
   const [highlighted, setHighlighted] = useState(0);
   const search = useRef<HTMLInputElement>(null);
@@ -104,7 +107,36 @@ export const OrganizationSelector: FC<{ asOpenSelect?: boolean }> = ({
     },
     [switchOrganization]
   );
-  if (isLoading || !data || data.length <= 1) {
+  const createCompany = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const trimmedName = name.trim();
+    if (inFlight.current || !trimmedName || trimmedName.length > 60) return;
+    inFlight.current = true;
+    setPending(true);
+    setError(false);
+    try {
+      // Retain a successful creation if switching fails, so retry cannot duplicate it.
+      if (!createdOrganization.current) {
+        const response = await fetch('/user/organizations', {
+          method: 'POST',
+          body: JSON.stringify({ name: trimmedName }),
+        });
+        if (!response.ok) throw new Error('Could not create company');
+        createdOrganization.current = await response.json() as Organization;
+      }
+      await switchOrganization(createdOrganization.current.id);
+      createdOrganization.current = null;
+      setName('');
+      setCreating(false);
+      setOpen(false);
+    } catch {
+      setError(true);
+    } finally {
+      inFlight.current = false;
+      setPending(false);
+    }
+  };
+  if (isLoading || !data || data.length === 0) {
     return null;
   }
   const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
@@ -169,8 +201,37 @@ export const OrganizationSelector: FC<{ asOpenSelect?: boolean }> = ({
           )}
         </button>
       ))}
-      {pending && <div role="status">Switching organization...</div>}
-      {error && <div role="alert">Could not switch organization. Please try again.</div>}
+      {creating ? (
+        <form onSubmit={createCompany} onKeyDown={(event) => event.stopPropagation()} className="flex flex-col gap-[8px] border-t border-tableBorder pt-[8px]">
+          <input
+            autoFocus
+            aria-label="Company name"
+            placeholder="Company name"
+            required
+            maxLength={60}
+            value={name}
+            disabled={pending || !!createdOrganization.current}
+            onChange={(event: React.ChangeEvent<HTMLInputElement>) => setName(event.target.value)}
+            className="w-full rounded border border-tableBorder bg-third p-[8px]"
+          />
+          <button type="submit" disabled={pending || !name.trim()} className="rounded bg-btnPrimary p-[8px] disabled:opacity-50">
+            {createdOrganization.current ? 'Retry switch' : 'Create'}
+          </button>
+          <button type="button" disabled={pending} onClick={() => {
+            setCreating(false);
+            setName('');
+            setError(false);
+            createdOrganization.current = null;
+          }}>Cancel</button>
+        </form>
+      ) : (
+        <button type="button" disabled={pending} onKeyDown={(event) => event.stopPropagation()} onClick={() => {
+          setCreating(true);
+          setError(false);
+        }} className="border-t border-tableBorder pt-[8px] text-start disabled:opacity-50">+ Create company</button>
+      )}
+      {pending && <div role="status">{creating ? 'Creating company and switching...' : 'Switching organization...'}</div>}
+      {error && <div role="alert">{creating ? 'Could not create or switch company. Please try again.' : 'Could not switch organization. Please try again.'}</div>}
     </div>
   );
   return (
