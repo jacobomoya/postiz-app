@@ -26,6 +26,77 @@ beforeEach(() => {
 
 const open = () => fireEvent.click(screen.getByRole('button', { name: /Alpha/ }));
 
+const organizations = (count: number) => {
+  mockData = [{ id: 'a', name: 'Alpha' }, ...Array.from({ length: count - 1 }, (_, index) => ({ id: `org-${index}`, name: `Company ${index}` }))];
+};
+
+test.each([2, 8])('keeps the plain list for %i organizations', (count) => {
+  organizations(count);
+  render(<OrganizationSelector />);
+  open();
+  expect(screen.queryByRole('searchbox')).toBeNull();
+});
+
+test('focuses search for more than eight organizations and filters without closing', () => {
+  organizations(9);
+  render(<OrganizationSelector />);
+  open();
+  const input = screen.getByRole('searchbox', { name: 'Search organizations' });
+  expect(document.activeElement).toBe(input);
+  fireEvent.mouseDown(input);
+  fireEvent.change(input, { target: { value: 'cOmPaNy 3' } });
+  expect(screen.getByRole('button', { name: 'Company 3' })).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Company 2' })).toBeNull();
+  expect(screen.getByRole('searchbox')).toBe(input);
+  fireEvent.change(input, { target: { value: 'missing' } });
+  expect(screen.queryByRole('button', { name: /Company/ })).toBeNull();
+  fireEvent.keyDown(input, { key: 'Enter' });
+  expect(mockFetch).not.toHaveBeenCalled();
+  fireEvent.keyDown(input, { key: 'Escape' });
+  expect(screen.queryByRole('searchbox')).toBeNull();
+  open();
+  expect((screen.getByRole('searchbox') as HTMLInputElement).value).toBe('');
+});
+
+test('navigates filtered organizations with arrows and selects with Enter', async () => {
+  organizations(9);
+  render(<OrganizationSelector />);
+  open();
+  const input = screen.getByRole('searchbox');
+  mockFetch.mockResolvedValue({ ok: true, json: async () => ({ id: 'org-1', orgId: 'org-1' }) });
+  fireEvent.change(input, { target: { value: 'Company' } });
+  fireEvent.keyDown(input, { key: 'ArrowDown' });
+  fireEvent.keyDown(input, { key: 'ArrowDown' });
+  fireEvent.keyDown(input, { key: 'ArrowUp' });
+  fireEvent.keyDown(input, { key: 'Enter' });
+  await waitFor(() => expect(mockCloseAll).toHaveBeenCalledTimes(1));
+  expect(mockFetch).toHaveBeenCalledWith('/user/change-org', { method: 'POST', body: JSON.stringify({ id: 'org-1' }) });
+});
+
+test('resets the highlighted item when the search changes', async () => {
+  organizations(9);
+  mockFetch.mockResolvedValue({ ok: true, json: async () => ({ id: 'org-3', orgId: 'org-3' }) });
+  render(<OrganizationSelector />);
+  open();
+  const input = screen.getByRole('searchbox');
+  fireEvent.keyDown(input, { key: 'ArrowUp' });
+  fireEvent.change(input, { target: { value: 'Company 3' } });
+  fireEvent.keyDown(input, { key: 'Enter' });
+  await waitFor(() => expect(mockCloseAll).toHaveBeenCalledTimes(1));
+  expect(mockFetch).toHaveBeenCalledWith('/user/change-org', { method: 'POST', body: JSON.stringify({ id: 'org-3' }) });
+});
+
+test('supports keyboard navigation in the plain list and marks the current organization', async () => {
+  render(<OrganizationSelector />);
+  open();
+  expect(screen.getByText('Alpha', { selector: '[aria-current="true"]' })).toBeTruthy();
+  const option = screen.getByRole('button', { name: 'Beta' });
+  expect(document.activeElement).toBe(option);
+  fireEvent.keyDown(option, { key: 'ArrowUp' });
+  fireEvent.keyDown(option, { key: 'Enter' });
+  await waitFor(() => expect(mockFetch).toHaveBeenCalledTimes(1));
+});
+
 test('updates the current organization when the user changes with cached organizations', () => {
   const { rerender } = render(<OrganizationSelector />);
   expect(screen.getByRole('button', { name: /Alpha/ })).toBeTruthy();

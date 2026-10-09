@@ -33,6 +33,45 @@ export class PostsRepository {
     private _errors: PrismaRepository<'errors'>
   ) {}
 
+  async getOrganizationOverviewCounts(organizationIds: string[]) {
+    if (!organizationIds.length) {
+      return [];
+    }
+
+    const [planned, errors] = await Promise.all([
+      this._post.model.post.groupBy({
+        by: ['organizationId'],
+        where: {
+          organizationId: { in: organizationIds },
+          state: State.QUEUE,
+          publishDate: { gt: new Date() },
+          // Match calendar visibility: thread children are not separate posts.
+          deletedAt: null,
+          parentPostId: null,
+          integration: { deletedAt: null },
+        },
+        _count: { _all: true },
+      }),
+      // Errors has no resolved/read flag: count every persisted error entry.
+      this._errors.model.errors.groupBy({
+        by: ['organizationId'],
+        where: { organizationId: { in: organizationIds } },
+        _count: { _all: true },
+      }),
+    ]);
+    const plannedByOrganization = new Map(
+      planned.map((count) => [count.organizationId, count._count._all])
+    );
+    const errorsByOrganization = new Map(
+      errors.map((count) => [count.organizationId, count._count._all])
+    );
+    return organizationIds.map((organizationId) => ({
+      organizationId,
+      planned: plannedByOrganization.get(organizationId) ?? 0,
+      errors: errorsByOrganization.get(organizationId) ?? 0,
+    }));
+  }
+
   searchForMissingThreeHoursPosts() {
     return this._post.model.post.findMany({
       where: {

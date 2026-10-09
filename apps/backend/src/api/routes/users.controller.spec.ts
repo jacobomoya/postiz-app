@@ -2,8 +2,12 @@ import { ForbiddenException } from '@nestjs/common';
 import { Response } from 'express';
 import { User } from '@prisma/client';
 import { UsersController } from './users.controller';
+import { PostsService } from '@gitroom/nestjs-libraries/database/prisma/posts/posts.service';
+import { PostsRepository } from '@gitroom/nestjs-libraries/database/prisma/posts/posts.repository';
 import { OrganizationService } from '@gitroom/nestjs-libraries/database/prisma/organizations/organization.service';
 
+jest.mock('@gitroom/nestjs-libraries/database/prisma/posts/posts.service', () => ({}));
+jest.mock('@gitroom/nestjs-libraries/database/prisma/prisma.service', () => ({}));
 jest.mock('@gitroom/nestjs-libraries/database/prisma/subscriptions/subscription.service', () => ({}));
 jest.mock('@gitroom/nestjs-libraries/services/payment/payment.service', () => ({}));
 jest.mock('@gitroom/backend/services/auth/auth.service', () => ({}));
@@ -16,6 +20,119 @@ jest.mock('@gitroom/nestjs-libraries/database/prisma/users/users.service', () =>
 jest.mock('@gitroom/nestjs-libraries/track/track.service', () => ({}));
 // The custom forbidden filter imports middleware with infrastructure dependencies.
 jest.mock('@gitroom/nestjs-libraries/services/exception.filter', () => ({}));
+
+describe('Organizations overview', () => {
+  const user = { id: 'current-user' } as User;
+  const enabled = [
+    { id: 'org-a', name: 'Company A', users: [{ disabled: false }] },
+    { id: 'org-b', name: 'Company B', users: [{ disabled: false }] },
+    { id: 'org-zero', name: 'Company Zero', users: [{ disabled: false }] },
+  ];
+  let controller: UsersController;
+  let getOrgsByUserId: jest.Mock;
+  let getOrganizationOverviewCounts: jest.Mock;
+
+  beforeEach(() => {
+    getOrgsByUserId = jest.fn().mockResolvedValue(enabled);
+    getOrganizationOverviewCounts = jest.fn().mockResolvedValue([
+      { organizationId: 'org-b', planned: 2, errors: 0 },
+      { organizationId: 'org-a', planned: 3, errors: 4 },
+    ]);
+    controller = new UsersController(
+      undefined!, undefined!, undefined!,
+      { getOrgsByUserId } as unknown as OrganizationService,
+      undefined!, undefined!,
+      { getOrganizationOverviewCounts } as unknown as PostsService
+    );
+  });
+
+  it('returns each enabled organization with its counts and zero defaults', async () => {
+    await expect(controller.getOrganizationsOverview(user)).resolves.toEqual([
+      { id: 'org-a', name: 'Company A', planned: 3, errors: 4 },
+      { id: 'org-b', name: 'Company B', planned: 2, errors: 0 },
+      { id: 'org-zero', name: 'Company Zero', planned: 0, errors: 0 },
+    ]);
+    expect(getOrgsByUserId).toHaveBeenCalledWith(user.id);
+    expect(getOrganizationOverviewCounts).toHaveBeenCalledTimes(1);
+    expect(getOrganizationOverviewCounts).toHaveBeenCalledWith(['org-a', 'org-b', 'org-zero']);
+  });
+
+  it('excludes disabled memberships before requesting counts', async () => {
+    getOrgsByUserId.mockResolvedValue([
+      enabled[0],
+      { id: 'disabled-org', name: 'Disabled', users: [{ disabled: true }] },
+    ]);
+    await expect(controller.getOrganizationsOverview(user)).resolves.toEqual([
+      { id: 'org-a', name: 'Company A', planned: 3, errors: 4 },
+    ]);
+    expect(getOrganizationOverviewCounts).toHaveBeenCalledWith(['org-a']);
+  });
+
+  it.each([
+    { organizations: [] },
+    { organizations: [{ id: 'disabled-org', users: [{ disabled: true }] }] },
+  ])(
+    'returns no entries and skips counts when no memberships are enabled (%j)',
+    async ({ organizations }) => {
+      getOrgsByUserId.mockResolvedValue(organizations);
+      await expect(controller.getOrganizationsOverview(user)).resolves.toEqual([]);
+      expect(getOrganizationOverviewCounts).not.toHaveBeenCalled();
+    }
+  );
+
+  it('registers the authenticated overview as a static GET route', () => {
+    expect(Reflect.getMetadata('path', controller.getOrganizationsOverview)).toBe('/organizations/overview');
+    expect(Reflect.getMetadata('method', controller.getOrganizationsOverview)).toBe(0);
+  });
+});
+
+describe('PostsRepository organization overview counts', () => {
+  it('groups future queued calendar posts and all error entries by organization', async () => {
+    const now = new Date('2026-01-01T00:00:00Z');
+    jest.useFakeTimers().setSystemTime(now);
+    try {
+      const posts = jest.fn().mockResolvedValue([
+        { organizationId: 'org-a', _count: { _all: 3 } },
+      ]);
+      const errors = jest.fn().mockResolvedValue([
+        { organizationId: 'org-b', _count: { _all: 4 } },
+      ]);
+      const repository = new PostsRepository(
+        { model: { post: { groupBy: posts } } } as any,
+        undefined!, undefined!, undefined!, undefined!,
+        { model: { errors: { groupBy: errors } } } as any
+      );
+      await expect(repository.getOrganizationOverviewCounts(['org-a', 'org-b', 'org-zero'])).resolves.toEqual([
+        { organizationId: 'org-a', planned: 3, errors: 0 },
+        { organizationId: 'org-b', planned: 0, errors: 4 },
+        { organizationId: 'org-zero', planned: 0, errors: 0 },
+      ]);
+      expect(posts).toHaveBeenCalledTimes(1);
+      expect(posts).toHaveBeenCalledWith({
+        by: ['organizationId'],
+        where: {
+          organizationId: { in: ['org-a', 'org-b', 'org-zero'] },
+          state: 'QUEUE', publishDate: { gt: now }, deletedAt: null,
+          parentPostId: null, integration: { deletedAt: null },
+        },
+        _count: { _all: true },
+      });
+      expect(errors).toHaveBeenCalledTimes(1);
+      expect(errors).toHaveBeenCalledWith({
+        by: ['organizationId'],
+        where: { organizationId: { in: ['org-a', 'org-b', 'org-zero'] } },
+        _count: { _all: true },
+      });
+      posts.mockClear();
+      errors.mockClear();
+      await expect(repository.getOrganizationOverviewCounts([])).resolves.toEqual([]);
+      expect(posts).not.toHaveBeenCalled();
+      expect(errors).not.toHaveBeenCalled();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+});
 
 describe('UsersController.changeOrg', () => {
   const user = { id: 'current-user' } as User;
@@ -40,7 +157,7 @@ describe('UsersController.changeOrg', () => {
     controller = new UsersController(
       undefined!, undefined!, undefined!,
       { getOrgsByUserId } as unknown as OrganizationService,
-      undefined!, undefined!
+      undefined!, undefined!, undefined!
     );
     cookie = jest.fn().mockReturnThis();
     header = jest.fn().mockReturnThis();

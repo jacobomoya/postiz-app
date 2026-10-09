@@ -77,6 +77,10 @@ export class PostsService {
     private _refreshIntegrationService: RefreshIntegrationService
   ) {}
 
+  getOrganizationOverviewCounts(organizationIds: string[]) {
+    return this._postRepository.getOrganizationOverviewCounts(organizationIds);
+  }
+
   searchForMissingThreeHoursPosts() {
     return this._postRepository.searchForMissingThreeHoursPosts();
   }

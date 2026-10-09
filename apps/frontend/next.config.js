@@ -53,6 +53,17 @@ const nextConfig = {
             ? '/api/uploads/:path*'
             : '/404',
       },
+      // Local development without nginx (mirrors var/docker/nginx.conf:
+      // same-origin /api/ proxied to the backend so cookies stay
+      // first-party). No-op unless LOCAL_BACKEND_PROXY is explicitly set.
+      ...(process.env.LOCAL_BACKEND_PROXY === 'true'
+        ? [
+            {
+              source: '/api/:path*',
+              destination: `${process.env.LOCAL_BACKEND_PROXY_URL || 'http://127.0.0.1:3000'}/:path*`,
+            },
+          ]
+        : []),
     ];
   },
 };

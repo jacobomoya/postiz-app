@@ -18,6 +18,7 @@ import { PaymentService } from '@gitroom/nestjs-libraries/services/payment/payme
 import { Response, Request } from 'express';
 import { AuthService } from '@gitroom/backend/services/auth/auth.service';
 import { AuthService as AuthChecker } from '@gitroom/helpers/auth/auth.service';
+import { PostsService } from '@gitroom/nestjs-libraries/database/prisma/posts/posts.service';
 import { OrganizationService } from '@gitroom/nestjs-libraries/database/prisma/organizations/organization.service';
 import { CheckPolicies } from '@gitroom/backend/services/auth/permissions/permissions.ability';
 import { getCookieUrlFromDomain } from '@gitroom/helpers/subdomain/subdomain.management';
@@ -46,7 +47,8 @@ export class UsersController {
     private _authService: AuthService,
     private _orgService: OrganizationService,
     private _userService: UsersService,
-    private _trackService: TrackService
+    private _trackService: TrackService,
+    private _postsService: PostsService
   ) {}
 
   @Get('/chatbase-token')
@@ -295,6 +297,30 @@ export class UsersController {
     response.status(200).json({
       id: typeof addedOrg !== 'boolean' ? addedOrg.organizationId : null,
     });
+  }
+
+  @Get('/organizations/overview')
+  async getOrganizationsOverview(@GetUserFromRequest() user: User) {
+    const organizations = (await this._orgService.getOrgsByUserId(user.id))
+      .filter((organization) =>
+        organization.users.some((membership) => membership.disabled === false)
+      );
+    if (!organizations.length) {
+      return [];
+    }
+
+    const counts = await this._postsService.getOrganizationOverviewCounts(
+      organizations.map((organization) => organization.id)
+    );
+    const countsByOrganization = new Map(
+      counts.map((count) => [count.organizationId, count])
+    );
+    return organizations.map(({ id, name }) => ({
+      id,
+      name,
+      planned: countsByOrganization.get(id)?.planned ?? 0,
+      errors: countsByOrganization.get(id)?.errors ?? 0,
+    }));
   }
 
   @Get('/organizations')
