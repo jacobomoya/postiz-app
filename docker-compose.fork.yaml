@@ -1,0 +1,15 @@
+# Postbiz deployment override
+
+Use together with the upstream compose file to run Postbiz from the fork's own image instead of the official one:
+
+```bash
+docker compose -f docker-compose.yaml -f docker-compose.fork.yaml up -d
+```
+
+Nothing else changes: the rest of the stack (Postgres, Redis, Temporal, nginx same-origin `/api/`) comes from `docker-compose.yaml`.
+
+```yaml
+services:
+  postiz:
+    image: ghcr.io/jacobomoya/postiz-app:latest
+```
