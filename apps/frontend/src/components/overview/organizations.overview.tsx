@@ -116,8 +116,8 @@ export const OrganizationsOverview = () => {
         </div>
       ) : !organizations ? (
         <p role="status">{t('company_overview_loading', 'Loading company overview...')}</p>
-      ) : organizations.length < 2 ? (
-        <p>{t('company_overview_empty', 'The company overview is available when you belong to two or more organizations.')}</p>
+      ) : organizations.length === 0 ? (
+        <p>{t('company_overview_empty', 'No companies yet. Create your first one below.')}</p>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-start" aria-label={t('company_overview', 'Company overview')} aria-busy={pending}>

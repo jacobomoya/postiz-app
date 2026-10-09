@@ -874,7 +874,7 @@
   "company_overview": "Company overview",
   "company_overview_load_error": "Could not load the company overview. Please try again.",
   "company_overview_loading": "Loading company overview...",
-  "company_overview_empty": "The company overview is available when you belong to two or more organizations.",
+  "company_overview_empty": "No companies yet. Create your first one below.",
   "company": "Company",
   "planned": "Planned",
   "errors": "Errors",

@@ -874,7 +874,7 @@
   "company_overview": "Resumen de empresas",
   "company_overview_load_error": "No se pudo cargar el resumen de empresas. Inténtalo de nuevo.",
   "company_overview_loading": "Cargando el resumen de empresas...",
-  "company_overview_empty": "El resumen de empresas está disponible cuando perteneces a dos o más organizaciones.",
+  "company_overview_empty": "Aún no hay empresas. Crea la primera abajo.",
   "company": "Empresa",
   "planned": "Planificadas",
   "errors": "Errores",

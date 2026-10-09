@@ -40,11 +40,18 @@ test('renders company rows with planned and persisted error counts', async () =>
   expect(mockFetch).toHaveBeenCalledWith('/user/organizations/overview');
 });
 
-test.each([0, 1])('shows an empty state for %i organizations', async (count) => {
-  mockFetch.mockResolvedValueOnce({ ok: true, json: async () => organizations.slice(0, count) });
+test('shows an empty state for 0 organizations', async () => {
+  mockFetch.mockResolvedValueOnce({ ok: true, json: async () => [] });
   render(<OrganizationsOverview />);
-  expect(await screen.findByText('The company overview is available when you belong to two or more organizations.')).toBeTruthy();
+  expect(await screen.findByText('No companies yet. Create your first one below.')).toBeTruthy();
   expect(screen.queryByRole('table')).toBeNull();
+});
+
+test('shows the current company for 1 organization', async () => {
+  mockFetch.mockResolvedValueOnce({ ok: true, json: async () => organizations.slice(0, 1) });
+  render(<OrganizationsOverview />);
+  expect(await screen.findByRole('row', { name: /Alpha/ })).toBeTruthy();
+  expect(screen.queryByText('No companies yet. Create your first one below.')).toBeNull();
 });
 
 test('switches via the shared endpoint and refreshes the user', async () => {
@@ -132,7 +139,20 @@ test('offers the create action in the empty state', async () => {
     json: async () => path === '/user/organizations/overview' ? [] : { id: 'b' },
   }));
   render(<OrganizationsOverview />);
-  expect(await screen.findByText(/company overview is available/)).toBeTruthy();
+  expect(await screen.findByText(/No companies yet/)).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Create company' })).toBeTruthy();
   expect(screen.getByRole('textbox', { name: 'Company name' })).toBeTruthy();
+});
+
+test('shows the current company row when there is exactly one organization', async () => {
+  mockFetch.mockImplementation(async (path: string) => ({
+    ok: true,
+    json: async () => path === '/user/organizations/overview'
+      ? [{ id: 'solo', name: 'Una Persona', planned: 0, errors: 0 }]
+      : { id: 'solo' },
+  }));
+  render(<OrganizationsOverview />);
+  expect(await screen.findByRole('row', { name: /Una Persona/ })).toBeTruthy();
+  expect(screen.queryByText(/No companies yet/)).toBeNull();
+  expect(screen.getByRole('button', { name: 'Create company' })).toBeTruthy();
 });
