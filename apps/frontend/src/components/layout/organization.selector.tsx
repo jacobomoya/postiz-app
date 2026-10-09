@@ -7,6 +7,7 @@ import useSWR from 'swr';
 import { useUser } from '@gitroom/frontend/components/layout/user.context';
 import clsx from 'clsx';
 import { useOrganizationSwitch } from './use.organization.switch';
+import { useT } from '@gitroom/react/translation/get.transation.service.client';
 type Organization = { name: string; id: string; users?: { role: string }[] };
 
 export const OrganizationSelector: FC<{ asOpenSelect?: boolean }> = ({
@@ -15,6 +16,7 @@ export const OrganizationSelector: FC<{ asOpenSelect?: boolean }> = ({
   const fetch = useFetch();
   const user = useUser();
   const switchOrganization = useOrganizationSwitch();
+  const t = useT();
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState(false);
@@ -170,8 +172,8 @@ export const OrganizationSelector: FC<{ asOpenSelect?: boolean }> = ({
         <input
           ref={search}
           type="search"
-          aria-label="Search organizations"
-          placeholder="Search organizations"
+          aria-label={t('search_organizations', 'Search organizations')}
+          placeholder={t('search_organizations', 'Search organizations')}
           value={query}
           onChange={(event: React.ChangeEvent<HTMLInputElement>) => {
             setQuery(event.target.value);
@@ -205,8 +207,8 @@ export const OrganizationSelector: FC<{ asOpenSelect?: boolean }> = ({
         <form onSubmit={createCompany} onKeyDown={(event) => event.stopPropagation()} className="flex flex-col gap-[8px] border-t border-tableBorder pt-[8px]">
           <input
             autoFocus
-            aria-label="Company name"
-            placeholder="Company name"
+            aria-label={t('company_name', 'Company name')}
+            placeholder={t('company_name', 'Company name')}
             required
             maxLength={60}
             value={name}
@@ -222,16 +224,16 @@ export const OrganizationSelector: FC<{ asOpenSelect?: boolean }> = ({
             setName('');
             setError(false);
             createdOrganization.current = null;
-          }}>Cancel</button>
+          }}>{t('cancel', 'Cancel')}</button>
         </form>
       ) : (
         <button type="button" disabled={pending} onKeyDown={(event) => event.stopPropagation()} onClick={() => {
           setCreating(true);
           setError(false);
-        }} className="border-t border-tableBorder pt-[8px] text-start disabled:opacity-50">+ Create company</button>
+        }} className="border-t border-tableBorder pt-[8px] text-start disabled:opacity-50">{t('create_company', 'Create company')}</button>
       )}
       {pending && <div role="status">{creating ? 'Creating company and switching...' : 'Switching organization...'}</div>}
-      {error && <div role="alert">{creating ? 'Could not create or switch company. Please try again.' : 'Could not switch organization. Please try again.'}</div>}
+      {error && <div role="alert">{creating ? t('create_company_error', 'Could not create or switch company. Please try again.') : t('switch_organization_error', 'Could not switch organization. Please try again.')}</div>}
     </div>
   );
   return (

@@ -11,6 +11,9 @@ jest.mock('@sentry/nextjs', () => ({ captureException: jest.fn() }));
 jest.mock('./new-modal', () => ({ useModals: () => ({ closeAll: mockCloseAll }) }));
 jest.mock('../new-launch/store', () => ({ useLaunchStore: { getState: () => ({ reset: jest.fn() }) } }));
 const mockMutate = jest.fn();
+jest.mock('@gitroom/react/translation/get.transation.service.client', () => ({
+  useT: () => (_key: string, fallback: string) => fallback,
+}), { virtual: true });
 jest.mock('@gitroom/helpers/utils/custom.fetch', () => ({ useFetch: () => mockFetch }));
 jest.mock('./user.context', () => ({ useUser: () => ({ orgId: mockOrgId, tier: { current: 'FREE' } }) }));
 jest.mock('swr', () => ({ __esModule: true, default: () => ({ data: mockData, isLoading: mockLoading }), useSWRConfig: () => ({ mutate: mockMutate }) }));
@@ -159,12 +162,12 @@ test('makes creation reachable with one organization', () => {
   organizations(1);
   render(<OrganizationSelector />);
   open();
-  expect(screen.getByRole('button', { name: '+ Create company' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Create company' })).toBeTruthy();
 });
 
 const startCreation = () => {
   open();
-  fireEvent.click(screen.getByRole('button', { name: '+ Create company' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Create company' }));
   fireEvent.change(screen.getByRole('textbox', { name: 'Company name' }), { target: { value: '  New company  ' } });
 };
 
@@ -217,7 +220,7 @@ test('keeps form keyboard input separate from switching and allows cancel', () =
   expect((screen.getByRole('button', { name: 'Create' }) as HTMLButtonElement).disabled).toBe(true);
   fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
   expect(screen.queryByRole('textbox')).toBeNull();
-  expect(screen.getByRole('button', { name: '+ Create company' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Create company' })).toBeTruthy();
 });
 
 test('renders nothing while loading', () => {

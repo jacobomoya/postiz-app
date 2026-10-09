@@ -93,3 +93,46 @@ test('shows switch failures and enables retry', async () => {
   fireEvent.click(button);
   await waitFor(() => expect(mockCloseAll).toHaveBeenCalledTimes(1));
 });
+
+test('creates a company and refreshes the overview list', async () => {
+  render(<OrganizationsOverview />);
+  await screen.findByRole('row', { name: /Alpha/ });
+  const input = screen.getByRole('textbox', { name: 'Company name' });
+  const create = screen.getByRole('button', { name: 'Create company' });
+  expect(create.disabled).toBe(true);
+  fireEvent.change(input, { target: { value: 'Gamma' } });
+  expect(create.disabled).toBe(false);
+  mockFetch.mockImplementation(async (path: string, options?: { method?: string }) => {
+    if (path === '/user/organizations' && options?.method === 'POST') {
+      return { ok: true, json: async () => ({ id: 'c', name: 'Gamma' }) };
+    }
+    if (path === '/user/organizations/overview') {
+      return { ok: true, json: async () => [...organizations, { id: 'c', name: 'Gamma', planned: 0, errors: 0 }] };
+    }
+    return { ok: true, json: async () => ({ id: 'b' }) };
+  });
+  fireEvent.click(create);
+  expect(await screen.findByRole('status')).toHaveProperty('textContent', 'Company created.');
+  expect(mockFetch.mock.calls.some((call: unknown[]) => call[0] === '/user/organizations')).toBe(true);
+  expect(await screen.findByRole('row', { name: /Gamma/ })).toBeTruthy();
+});
+
+test('shows the creation error line when the create request fails', async () => {
+  render(<OrganizationsOverview />);
+  await screen.findByRole('row', { name: /Alpha/ });
+  fireEvent.change(screen.getByRole('textbox', { name: 'Company name' }), { target: { value: 'Gamma' } });
+  mockFetch.mockImplementationOnce(async () => ({ ok: false }));
+  fireEvent.click(screen.getByRole('button', { name: 'Create company' }));
+  expect(await screen.findByRole('alert')).toHaveProperty('textContent', 'Could not create the company. Please try again.');
+});
+
+test('offers the create action in the empty state', async () => {
+  mockFetch.mockImplementation(async (path: string) => ({
+    ok: true,
+    json: async () => path === '/user/organizations/overview' ? [] : { id: 'b' },
+  }));
+  render(<OrganizationsOverview />);
+  expect(await screen.findByText(/company overview is available/)).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Create company' })).toBeTruthy();
+  expect(screen.getByRole('textbox', { name: 'Company name' })).toBeTruthy();
+});

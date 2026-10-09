@@ -7,6 +7,9 @@ import { OrganizationSelector } from './organization.selector';
 const mockFetch = jest.fn();
 const mockReport = jest.fn();
 const mockUserContext = createContext<any>(undefined);
+jest.mock('@gitroom/react/translation/get.transation.service.client', () => ({
+  useT: () => (_key: string, fallback: string) => fallback,
+}), { virtual: true });
 jest.mock('@gitroom/helpers/utils/custom.fetch', () => ({ useFetch: () => mockFetch }));
 jest.mock('./user.context', () => ({ useUser: () => useContext(mockUserContext) }));
 jest.mock('@sentry/nextjs', () => ({ captureException: (...args: any[]) => mockReport(...args) }));

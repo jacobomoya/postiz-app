@@ -23,6 +23,32 @@ export const OrganizationsOverview = () => {
   const [pending, setPending] = useState(false);
   const inFlight = useRef(false);
   const [attempt, setAttempt] = useState(0);
+  const [createName, setCreateName] = useState('');
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState(false);
+  const [created, setCreated] = useState(false);
+
+  const createCompany = async () => {
+    if (creating) return;
+    const name = createName.trim();
+    if (!name || name.length > 60) return;
+    setCreating(true);
+    setCreateError(false);
+    try {
+      const response = await fetch('/user/organizations', {
+        method: 'POST',
+        body: JSON.stringify({ name }),
+      });
+      if (!response.ok) throw new Error('Could not create company');
+      setCreateName('');
+      setCreated(true);
+      setAttempt((value) => value + 1);
+    } catch {
+      setCreateError(true);
+    } finally {
+      setCreating(false);
+    }
+  };
 
   useEffect(() => {
     let active = true;
@@ -59,6 +85,28 @@ export const OrganizationsOverview = () => {
   return (
     <section className="flex flex-col gap-[16px] p-[24px] mobile:p-[12px] bg-newBgColorInner text-newTextColor">
       <h1 className="text-[24px] font-semibold">{t('company_overview', 'Company overview')}</h1>
+      <div className="border border-tableBorder rounded p-[12px]">
+        {created && <p role="status">{t('company_created', 'Company created.')}</p>}
+        {createError && <p role="alert">{t('create_company_error', 'Could not create the company. Please try again.')}</p>}
+        <div className="flex gap-[8px] items-center">
+          <input
+            value={createName}
+            onChange={(event) => setCreateName(event.target.value)}
+            maxLength={60}
+            placeholder={t('company_name', 'Company name')}
+            aria-label={t('company_name', 'Company name')}
+            className="w-full max-w-[280px] rounded border border-tableBorder bg-third p-[8px]"
+          />
+          <button
+            type="button"
+            disabled={creating || !createName.trim()}
+            onClick={() => void createCompany()}
+            className="rounded bg-btnPrimary px-[12px] py-[8px] disabled:opacity-50 disabled:cursor-wait"
+          >
+            {t('create_company', 'Create company')}
+          </button>
+        </div>
+      </div>
       {loadError ? (
         <div>
           <p role="alert">{t('company_overview_load_error', 'Could not load the company overview. Please try again.')}</p>
