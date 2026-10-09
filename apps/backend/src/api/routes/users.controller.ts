@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  ForbiddenException,
   Get,
   HttpException,
   Post,
@@ -309,10 +310,21 @@ export class UsersController {
   }
 
   @Post('/change-org')
-  changeOrg(
+  async changeOrg(
     @Body('id') id: string,
-    @Res({ passthrough: true }) response: Response
+    @Res({ passthrough: true }) response: Response,
+    @GetUserFromRequest() user: User
   ) {
+    const organizations = await this._orgService.getOrgsByUserId(user.id);
+    const target = organizations.find(
+      (organization) =>
+        organization.id === id &&
+        organization.users.some((membership) => membership.disabled === false)
+    );
+    if (!target) {
+      throw new ForbiddenException();
+    }
+
     response.cookie('showorg', id, {
       domain: getCookieUrlFromDomain(process.env.FRONTEND_URL!),
       ...(!process.env.NOT_SECURED
@@ -329,7 +341,7 @@ export class UsersController {
       response.header('showorg', id);
     }
 
-    response.status(200).send();
+    response.status(200).json({ id: target.id });
   }
 
   @Post('/delete-account')
