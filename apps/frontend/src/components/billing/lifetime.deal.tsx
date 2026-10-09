@@ -6,7 +6,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { pricing } from '@gitroom/nestjs-libraries/database/prisma/subscriptions/pricing';
 import { Input } from '@gitroom/react/form/input';
 import { Button } from '@gitroom/react/form/button';
-import { useSWRConfig } from 'swr';
+import { useRootUserMutate } from '../layout/organization.cache';
 import { useToaster } from '@gitroom/react/toaster/toaster';
 import { useRouter } from 'next/navigation';
 import { useFireEvents } from '@gitroom/helpers/utils/use.fire.events';
@@ -17,7 +17,7 @@ export const LifetimeDeal = () => {
   const user = useUser();
   const [code, setCode] = useState('');
   const toast = useToaster();
-  const { mutate } = useSWRConfig();
+  const mutateRootUser = useRootUserMutate();
   const router = useRouter();
   const fireEvents = useFireEvents();
   const claim = useCallback(async () => {
@@ -33,14 +33,14 @@ export const LifetimeDeal = () => {
       })
     ).json();
     if (success) {
-      mutate('/user/self');
+      void mutateRootUser();
       toast.show('Successfully claimed the code');
       fireEvents('lifetime_claimed');
     } else {
       toast.show('Code already claimed or invalid code', 'warning');
     }
     setCode('');
-  }, [code]);
+  }, [code, mutateRootUser]);
   const nextPackage = useMemo(() => {
     if (user?.tier?.current === 'STANDARD') {
       return 'PRO';

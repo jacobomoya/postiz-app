@@ -1,19 +1,63 @@
 'use client';
 
-import React, { FC, useCallback, useMemo } from 'react';
+import React, { FC, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useFetch } from '@gitroom/helpers/utils/custom.fetch';
 import useSWR from 'swr';
 import { useUser } from '@gitroom/frontend/components/layout/user.context';
 import clsx from 'clsx';
+import { useOrganizationSwitch } from './use.organization.switch';
 export const OrganizationSelector: FC<{ asOpenSelect?: boolean }> = ({
   asOpenSelect,
 }) => {
   const fetch = useFetch();
   const user = useUser();
+  const switchOrganization = useOrganizationSwitch();
+  const [open, setOpen] = useState(false);
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState(false);
+  const inFlight = useRef(false);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const menu = useRef<HTMLDivElement>(null);
+  const [position, setPosition] = useState({ top: 0, left: 0 });
+
+  useEffect(() => {
+    if (!open || asOpenSelect) return;
+    const updatePosition = () => {
+      const rect = trigger.current?.getBoundingClientRect();
+      if (rect) setPosition({ top: rect.bottom + 8, left: Math.max(8, Math.min(rect.left, window.innerWidth - 288)) });
+    };
+    const outside = (event: MouseEvent) => {
+      if (!trigger.current?.contains(event.target as Node) && !menu.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setOpen(false);
+        trigger.current?.focus();
+      }
+    };
+    updatePosition();
+    document.addEventListener('mousedown', outside);
+    document.addEventListener('keydown', escape);
+    window.addEventListener('resize', updatePosition);
+    window.addEventListener('scroll', updatePosition, true);
+    return () => {
+      document.removeEventListener('mousedown', outside);
+      document.removeEventListener('keydown', escape);
+      window.removeEventListener('resize', updatePosition);
+      window.removeEventListener('scroll', updatePosition, true);
+    };
+  }, [open, asOpenSelect]);
+
+  useEffect(() => {
+    if (!error) return;
+    const timeout = window.setTimeout(() => setError(false), 4000);
+    return () => window.clearTimeout(timeout);
+  }, [error]);
   const load = useCallback(async () => {
     return await (await fetch('/user/organizations')).json();
-  }, []);
-  const { isLoading, data } = useSWR('organizations', load, {
+  }, [fetch]);
+  const { isLoading, data } = useSWR('/user/organizations', load, {
     revalidateIfStale: false,
     revalidateOnFocus: false,
     refreshWhenOffline: false,
@@ -22,34 +66,77 @@ export const OrganizationSelector: FC<{ asOpenSelect?: boolean }> = ({
   });
   const current = useMemo(() => {
     return data?.find((d: any) => d.id === user?.orgId);
-  }, [data]);
+  }, [data, user?.orgId]);
   const withoutCurrent = useMemo(() => {
     return data?.filter((d: any) => d.id !== user?.orgId);
-  }, [current, data]);
+  }, [data, user?.orgId]);
   const changeOrg = useCallback(
     (org: { name: string; id: string }) => async () => {
-      await fetch('/user/change-org', {
-        method: 'POST',
-        body: JSON.stringify({
-          id: org.id,
-        }),
-      });
-      window.location.reload();
+      if (inFlight.current) return;
+      inFlight.current = true;
+      setPending(true);
+      setError(false);
+      try {
+        await switchOrganization(org.id);
+        setOpen(false);
+      } catch {
+        setError(true);
+      } finally {
+        inFlight.current = false;
+        setPending(false);
+      }
     },
-    []
+    [switchOrganization]
   );
-  if (isLoading || (!isLoading && data?.length === 1)) {
+  if (isLoading || !data || data.length <= 1) {
     return null;
   }
+  const options = (
+    <div
+      ref={menu}
+      aria-label="Organizations"
+      aria-busy={pending}
+      style={asOpenSelect ? undefined : position}
+      className={clsx(
+        'flex p-[12px] bg-third text-newTextColor text-[12px] border-tableBorder border gap-[12px] flex-col',
+        asOpenSelect ? 'relative max-w-[500px] mx-auto mb-[10px]' : 'fixed z-[1000] w-[280px] max-w-[calc(100vw-16px)] max-h-[50vh] overflow-y-auto'
+      )}
+    >
+      {withoutCurrent?.map((org: { name: string; id: string; users?: { role: string }[] }) => (
+        <button
+          type="button"
+          key={org.id}
+          onClick={changeOrg(org)}
+          disabled={pending}
+          className="text-start whitespace-nowrap truncate disabled:opacity-50 disabled:cursor-wait"
+        >
+          {org.name}
+          {!!org.users?.[0]?.role && (
+            <span className="text-customColor18">
+              {' '}({org.users[0].role === 'SUPERADMIN' ? 'Super-Admin' : org.users[0].role === 'ADMIN' ? 'Admin' : 'User'})
+            </span>
+          )}
+        </button>
+      ))}
+      {pending && <div role="status">Switching organization...</div>}
+      {error && <div role="alert">Could not switch organization. Please try again.</div>}
+    </div>
+  );
   return (
     <>
       <div className="hover:text-newTextColor">
-        <div className="group text-[12px] relative">
+        <div className="text-[12px] relative">
           {asOpenSelect && (
             <div className="bg-btnPrimary !flex !relative max-w-[500px] mx-auto py-[12px] px-[12px]">Select Organization</div>
           )}
           {!asOpenSelect && (
-            <div className="flex items-center gap-[6px]">
+            <button
+              type="button"
+              ref={trigger}
+              aria-expanded={open}
+              onClick={() => setOpen((value) => !value)}
+              className="flex items-center gap-[6px] max-w-full"
+            >
               <svg
                 className={user?.tier.current === 'FREE' ? 'animate-bounce drop-shadow-glow': ''}
                 width="24"
@@ -64,46 +151,11 @@ export const OrganizationSelector: FC<{ asOpenSelect?: boolean }> = ({
                 />
               </svg>
               {!!current?.name && (
-                <div className="max-w-[240px] truncate mobile:hidden">{current?.name}</div>
+                <span className="max-w-[240px] truncate">{current.name}</span>
               )}
-            </div>
+            </button>
           )}
-          {data?.length > 1 && (
-            <div
-              className={clsx(
-                'hidden py-[12px] px-[12px] group-hover:flex absolute top-[100%] end-0 w-max max-w-[400px] bg-third border-tableBorder border gap-[12px] cursor-pointer flex-col',
-                asOpenSelect ? '!flex !relative max-w-[500px] mx-auto mb-[10px]' : '',
-              )}
-            >
-              {withoutCurrent?.map(
-                (org: {
-                  name: string;
-                  id: string;
-                  users: { role: 'SUPERADMIN' | 'ADMIN' | 'USER' }[];
-                }) => (
-                  <div
-                    key={org?.id}
-                    onClick={changeOrg(org)}
-                    className="whitespace-nowrap truncate"
-                  >
-                    {org?.name}
-                    {!!org?.users?.[0]?.role && (
-                      <span className="text-customColor18">
-                        {' '}
-                        (
-                        {org?.users?.[0]?.role === 'SUPERADMIN'
-                          ? 'Super-Admin'
-                          : org?.users?.[0]?.role === 'ADMIN'
-                          ? 'Admin'
-                          : 'User'}
-                        )
-                      </span>
-                    )}
-                  </div>
-                )
-              )}
-            </div>
-          )}
+          {asOpenSelect ? options : open && createPortal(options, document.body)}
         </div>
       </div>
       {!asOpenSelect && <div className="w-[1px] h-[20px] bg-blockSeparator mobile:hidden" />}
