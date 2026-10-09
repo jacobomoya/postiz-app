@@ -410,7 +410,10 @@ export const DecisionEverywhere: FC = () => {
   const decision = useDecisionModal();
   useEffect(() => {
     decisionModalEmitter.on('open', decision.open);
-  }, []);
+    return () => {
+      decisionModalEmitter.removeListener('open', decision.open);
+    };
+  }, [decision.open]);
   return null;
 };
 
