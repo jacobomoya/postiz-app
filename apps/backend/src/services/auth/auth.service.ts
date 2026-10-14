@@ -10,6 +10,7 @@ import dayjs from 'dayjs';
 import { ForgotReturnPasswordDto } from '@gitroom/nestjs-libraries/dtos/auth/forgot-return.password.dto';
 import { EmailService } from '@gitroom/nestjs-libraries/services/email.service';
 import { NewsletterService } from '@gitroom/nestjs-libraries/newsletter/newsletter.service';
+import { InstanceSettingsService } from '@gitroom/nestjs-libraries/database/prisma/instance-settings/instance-settings.service';
 
 @Injectable()
 export class AuthService {
@@ -17,7 +18,8 @@ export class AuthService {
     private _userService: UsersService,
     private _organizationService: OrganizationService,
     private _emailService: EmailService,
-    private _providerManager: AuthProviderManager
+    private _providerManager: AuthProviderManager,
+    private _instanceSettingsService: InstanceSettingsService
   ) {}
   async canRegister(provider: string) {
     if (
@@ -54,23 +56,39 @@ export class AuthService {
           throw new Error('Registration is disabled');
         }
 
-        const create = await this._organizationService.createOrgAndUser(
-          body,
-          ip,
-          userAgent
+        const { defaultOrganizationId } = await this.getRegistrationPolicy(
+          body.email
         );
+
+        const hasInvite = !!addToOrg && typeof addToOrg !== 'boolean';
+        const newUser =
+          defaultOrganizationId && !hasInvite
+            ? await this._organizationService.createUserInOrg(
+                body,
+                defaultOrganizationId,
+                'USER',
+                ip,
+                userAgent
+              )
+            : (
+                await this._organizationService.createOrgAndUser(
+                  body,
+                  ip,
+                  userAgent
+                )
+              ).users[0].user;
 
         const addedOrg =
           addToOrg && typeof addToOrg !== 'boolean'
             ? await this._organizationService.addUserToOrg(
-                create.users[0].user.id,
+                newUser.id,
                 addToOrg.id,
                 addToOrg.orgId,
                 addToOrg.role
               )
             : false;
 
-        const obj = { addedOrg, jwt: await this.jwt(create.users[0].user) };
+        const obj = { addedOrg, jwt: await this.jwt(newUser) };
         await this._emailService.sendEmailSync(
           body.email,
           'Activate your account',
@@ -94,7 +112,8 @@ export class AuthService {
       provider,
       body as CreateOrgUserDto,
       ip,
-      userAgent
+      userAgent,
+      !!addToOrg && typeof addToOrg !== 'boolean'
     );
 
     const addedOrg =
@@ -131,11 +150,25 @@ export class AuthService {
     }
   }
 
+  // Throws when a brand-new account may not be created for this email.
+  // Existing accounts never reach this check, so narrowing the allowlist does
+  // not lock anyone out.
+  private async getRegistrationPolicy(email: string) {
+    const policy = await this._instanceSettingsService.getRegistrationPolicy(
+      email
+    );
+    if (!policy.allowed) {
+      throw new Error('Email domain not allowed');
+    }
+    return policy;
+  }
+
   private async loginOrRegisterProvider(
     provider: Provider,
     body: CreateOrgUserDto,
     ip: string,
-    userAgent: string
+    userAgent: string,
+    hasInvite = false
   ) {
     const providerInstance = this._providerManager.getProvider(provider);
     const providerUser = await providerInstance.getUser(body.providerToken);
@@ -156,15 +189,41 @@ export class AuthService {
       throw new Error('Registration is disabled');
     }
 
+    const { defaultOrganizationId } = await this.getRegistrationPolicy(
+      providerUser.email
+    );
+
+    const newUserBody = {
+      company: body.company,
+      email: providerUser.email,
+      password: '',
+      provider,
+      providerId: providerUser.id,
+      datafast_visitor_id: body.datafast_visitor_id,
+    };
+
+    if (defaultOrganizationId && !hasInvite) {
+      const joined = await this._organizationService.createUserInOrg(
+        newUserBody,
+        defaultOrganizationId,
+        'USER',
+        ip,
+        userAgent
+      );
+
+      this._track(
+        'register',
+        providerUser.email,
+        body.datafast_visitor_id
+      ).catch((err) => {});
+
+      await NewsletterService.register(providerUser.email);
+
+      return joined;
+    }
+
     const create = await this._organizationService.createOrgAndUser(
-      {
-        company: body.company,
-        email: providerUser.email,
-        password: '',
-        provider,
-        providerId: providerUser.id,
-        datafast_visitor_id: body.datafast_visitor_id,
-      },
+      newUserBody,
       ip,
       userAgent
     );
