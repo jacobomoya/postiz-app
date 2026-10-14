@@ -52,6 +52,8 @@ import { AdminStatsRepository } from '@gitroom/nestjs-libraries/database/prisma/
 import { AdminStatsService } from '@gitroom/nestjs-libraries/database/prisma/admin-stats/admin-stats.service';
 import { InstanceSettingsRepository } from '@gitroom/nestjs-libraries/database/prisma/instance-settings/instance-settings.repository';
 import { InstanceSettingsService } from '@gitroom/nestjs-libraries/database/prisma/instance-settings/instance-settings.service';
+import { AdminUsersRepository } from '@gitroom/nestjs-libraries/database/prisma/admin-users/admin-users.repository';
+import { AdminUsersService } from '@gitroom/nestjs-libraries/database/prisma/admin-users/admin-users.service';
 
 @Global()
 @Module({
@@ -113,6 +115,8 @@ import { InstanceSettingsService } from '@gitroom/nestjs-libraries/database/pris
     AdminStatsService,
     InstanceSettingsRepository,
     InstanceSettingsService,
+    AdminUsersRepository,
+    AdminUsersService,
   ],
   get exports() {
     return this.providers;
