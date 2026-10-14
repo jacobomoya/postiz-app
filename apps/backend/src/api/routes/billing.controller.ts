@@ -20,7 +20,10 @@ import { AuthService } from '@gitroom/helpers/auth/auth.service';
 import { UsersService } from '@gitroom/nestjs-libraries/database/prisma/users/users.service';
 import { PaymentService } from '@gitroom/nestjs-libraries/services/payment/payment.service';
 import { BillingSyncDto } from '@gitroom/nestjs-libraries/dtos/billing/billing.sync.dto';
-import { CheckPolicies } from '@gitroom/backend/services/auth/permissions/permissions.ability';
+import {
+  CheckPolicies,
+  RequireOrgRoles,
+} from '@gitroom/backend/services/auth/permissions/permissions.ability';
 import {
   AuthorizationActions,
   Sections,
@@ -165,6 +168,7 @@ export class BillingController {
 
   @Get('/invoices')
   @CheckPolicies([AuthorizationActions.Create, Sections.ADMIN])
+  @RequireOrgRoles('ADMIN', 'SUPERADMIN')
   async getInvoices(@GetOrgFromRequest() org: Organization) {
     return (await this.provider(org)).getInvoices(org.id);
   }

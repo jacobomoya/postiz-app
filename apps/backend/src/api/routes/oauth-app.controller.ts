@@ -3,7 +3,10 @@ import { GetOrgFromRequest } from '@gitroom/nestjs-libraries/user/org.from.reque
 import { Organization } from '@prisma/client';
 import { ApiTags } from '@nestjs/swagger';
 import { OAuthService } from '@gitroom/nestjs-libraries/database/prisma/oauth/oauth.service';
-import { CheckPolicies } from '@gitroom/backend/services/auth/permissions/permissions.ability';
+import {
+  CheckPolicies,
+  RequireOrgRoles,
+} from '@gitroom/backend/services/auth/permissions/permissions.ability';
 import {
   AuthorizationActions,
   Sections,
@@ -18,12 +21,14 @@ export class OAuthAppController {
 
   @Get('/')
   @CheckPolicies([AuthorizationActions.Create, Sections.ADMIN])
+  @RequireOrgRoles('ADMIN', 'SUPERADMIN')
   async getApp(@GetOrgFromRequest() org: Organization) {
     return this._oauthService.getApp(org.id);
   }
 
   @Post('/')
   @CheckPolicies([AuthorizationActions.Create, Sections.ADMIN])
+  @RequireOrgRoles('ADMIN', 'SUPERADMIN')
   async createApp(
     @GetOrgFromRequest() org: Organization,
     @Body() body: CreateOAuthAppDto
@@ -33,6 +38,7 @@ export class OAuthAppController {
 
   @Put('/')
   @CheckPolicies([AuthorizationActions.Create, Sections.ADMIN])
+  @RequireOrgRoles('ADMIN', 'SUPERADMIN')
   async updateApp(
     @GetOrgFromRequest() org: Organization,
     @Body() body: UpdateOAuthAppDto
@@ -42,12 +48,14 @@ export class OAuthAppController {
 
   @Delete('/')
   @CheckPolicies([AuthorizationActions.Create, Sections.ADMIN])
+  @RequireOrgRoles('ADMIN', 'SUPERADMIN')
   async deleteApp(@GetOrgFromRequest() org: Organization) {
     return this._oauthService.deleteApp(org.id);
   }
 
   @Post('/rotate-secret')
   @CheckPolicies([AuthorizationActions.Create, Sections.ADMIN])
+  @RequireOrgRoles('ADMIN', 'SUPERADMIN')
   async rotateSecret(@GetOrgFromRequest() org: Organization) {
     return this._oauthService.rotateSecret(org.id);
   }

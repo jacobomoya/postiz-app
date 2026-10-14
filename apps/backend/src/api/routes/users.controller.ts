@@ -23,7 +23,10 @@ import { AuthService } from '@gitroom/backend/services/auth/auth.service';
 import { AuthService as AuthChecker } from '@gitroom/helpers/auth/auth.service';
 import { PostsService } from '@gitroom/nestjs-libraries/database/prisma/posts/posts.service';
 import { OrganizationService } from '@gitroom/nestjs-libraries/database/prisma/organizations/organization.service';
-import { CheckPolicies } from '@gitroom/backend/services/auth/permissions/permissions.ability';
+import {
+  CheckPolicies,
+  RequireOrgRoles,
+} from '@gitroom/backend/services/auth/permissions/permissions.ability';
 import { getCookieUrlFromDomain } from '@gitroom/helpers/subdomain/subdomain.management';
 import { pricing } from '@gitroom/nestjs-libraries/database/prisma/subscriptions/pricing';
 import { ApiTags } from '@nestjs/swagger';
@@ -266,12 +269,14 @@ export class UsersController {
 
   @Post('/api-key/rotate')
   @CheckPolicies([AuthorizationActions.Create, Sections.ADMIN])
+  @RequireOrgRoles('ADMIN', 'SUPERADMIN')
   async rotateApiKey(@GetOrgFromRequest() organization: Organization) {
     return this._orgService.updateApiKey(organization.id);
   }
 
   @Get('/subscription')
   @CheckPolicies([AuthorizationActions.Create, Sections.ADMIN])
+  @RequireOrgRoles('ADMIN', 'SUPERADMIN')
   async getSubscription(@GetOrgFromRequest() organization: Organization) {
     const subscription = await this._paymentService.getSubscription(
       organization.id
@@ -282,6 +287,7 @@ export class UsersController {
 
   @Get('/subscription/tiers')
   @CheckPolicies([AuthorizationActions.Create, Sections.ADMIN])
+  @RequireOrgRoles('ADMIN', 'SUPERADMIN')
   async tiers() {
     return this._paymentService.getDefaultProvider('web').getPackages();
   }

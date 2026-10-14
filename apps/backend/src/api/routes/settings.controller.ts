@@ -10,7 +10,10 @@ import {
 import { GetOrgFromRequest } from '@gitroom/nestjs-libraries/user/org.from.request';
 import { GetUserFromRequest } from '@gitroom/nestjs-libraries/user/user.from.request';
 import { Organization, User } from '@prisma/client';
-import { CheckPolicies } from '@gitroom/backend/services/auth/permissions/permissions.ability';
+import {
+  CheckPolicies,
+  RequireOrgRoles,
+} from '@gitroom/backend/services/auth/permissions/permissions.ability';
 import { OrganizationService } from '@gitroom/nestjs-libraries/database/prisma/organizations/organization.service';
 import { AddTeamMemberDto } from '@gitroom/nestjs-libraries/dtos/settings/add.team.member.dto';
 import { AdminAddTeamMemberDto } from '@gitroom/nestjs-libraries/dtos/settings/admin.add.team.member.dto';
@@ -26,6 +29,7 @@ export class SettingsController {
   ) {}
 
   @Get('/team')
+  @RequireOrgRoles('ADMIN', 'SUPERADMIN')
   @CheckPolicies(
     [AuthorizationActions.Create, Sections.TEAM_MEMBERS],
     [AuthorizationActions.Create, Sections.ADMIN]
@@ -35,6 +39,7 @@ export class SettingsController {
   }
 
   @Post('/team')
+  @RequireOrgRoles('ADMIN', 'SUPERADMIN')
   @CheckPolicies(
     [AuthorizationActions.Create, Sections.TEAM_MEMBERS],
     [AuthorizationActions.Create, Sections.ADMIN]
@@ -61,6 +66,7 @@ export class SettingsController {
   }
 
   @Delete('/team/:id')
+  @RequireOrgRoles('ADMIN', 'SUPERADMIN')
   @CheckPolicies(
     [AuthorizationActions.Create, Sections.TEAM_MEMBERS],
     [AuthorizationActions.Create, Sections.ADMIN]

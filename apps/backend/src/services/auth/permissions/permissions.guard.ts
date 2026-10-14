@@ -1,4 +1,9 @@
-import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
+import {
+  CanActivate,
+  ExecutionContext,
+  ForbiddenException,
+  Injectable,
+} from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import {
   AppAbility,
@@ -7,8 +12,9 @@ import {
 import {
   AbilityPolicy,
   CHECK_POLICIES_KEY,
+  REQUIRE_ORG_ROLES_KEY,
 } from '@gitroom/backend/services/auth/permissions/permissions.ability';
-import { Organization } from '@prisma/client';
+import { Organization, Role, User } from '@prisma/client';
 import { Request } from 'express';
 import { SubscriptionException } from './permission.exception.class';
 
@@ -29,6 +35,8 @@ export class PoliciesGuard implements CanActivate {
     ) {
       return true;
     }
+
+    this.checkOrgRole(context, request);
 
     const policyHandlers =
       this._reflector.get<AbilityPolicy[]>(
@@ -61,6 +69,34 @@ export class PoliciesGuard implements CanActivate {
     }
 
     return true;
+  }
+
+  private checkOrgRole(context: ExecutionContext, request: Request) {
+    const roles = this._reflector.get<Role[]>(
+      REQUIRE_ORG_ROLES_KEY,
+      context.getHandler()
+    );
+
+    if (!roles?.length) {
+      return;
+    }
+
+    const { org, user } = request as unknown as {
+      org?: Organization & { users?: Array<{ role?: Role }> };
+      user?: User;
+    };
+
+    // Instance super-admins (including while impersonating a member) keep access.
+    if (user?.isSuperAdmin) {
+      return;
+    }
+
+    const role = org?.users?.[0]?.role;
+    if (!role || !roles.includes(role)) {
+      throw new ForbiddenException(
+        'Your role in this organization does not allow this action'
+      );
+    }
   }
 
   private execPolicyHandler(handler: AbilityPolicy, ability: AppAbility) {
