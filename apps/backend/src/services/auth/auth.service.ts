@@ -56,27 +56,23 @@ export class AuthService {
           throw new Error('Registration is disabled');
         }
 
-        const { defaultOrganizationId } = await this.getRegistrationPolicy(
-          body.email
-        );
+        // A typed email address proves nothing, so while the allowlist is
+        // active password accounts are created by an administrator instead.
+        const { restricted } =
+          await this._instanceSettingsService.getRegistrationPolicy(body.email);
+        if (restricted) {
+          throw new Error(
+            'Registration with email and password is disabled; ask an administrator for an account'
+          );
+        }
 
-        const hasInvite = !!addToOrg && typeof addToOrg !== 'boolean';
-        const newUser =
-          defaultOrganizationId && !hasInvite
-            ? await this._organizationService.createUserInOrg(
-                body,
-                defaultOrganizationId,
-                'USER',
-                ip,
-                userAgent
-              )
-            : (
-                await this._organizationService.createOrgAndUser(
-                  body,
-                  ip,
-                  userAgent
-                )
-              ).users[0].user;
+        const newUser = (
+          await this._organizationService.createOrgAndUser(
+            body,
+            ip,
+            userAgent
+          )
+        ).users[0].user;
 
         const addedOrg =
           addToOrg && typeof addToOrg !== 'boolean'
@@ -189,9 +185,17 @@ export class AuthService {
       throw new Error('Registration is disabled');
     }
 
-    const { defaultOrganizationId } = await this.getRegistrationPolicy(
-      providerUser.email
-    );
+    const { restricted, defaultOrganizationId } =
+      await this.getRegistrationPolicy(providerUser.email);
+
+    // Only a provider-verified address may pass the allowlist or join the
+    // default organization. Providers that do not report the flag never join
+    // it and keep the normal "new organization" behaviour.
+    const emailVerified = (providerUser as { emailVerified?: boolean })
+      .emailVerified;
+    if (restricted && emailVerified === false) {
+      throw new Error('Email domain not allowed');
+    }
 
     const newUserBody = {
       company: body.company,
@@ -202,7 +206,7 @@ export class AuthService {
       datafast_visitor_id: body.datafast_visitor_id,
     };
 
-    if (defaultOrganizationId && !hasInvite) {
+    if (defaultOrganizationId && emailVerified === true && !hasInvite) {
       const joined = await this._organizationService.createUserInOrg(
         newUserBody,
         defaultOrganizationId,

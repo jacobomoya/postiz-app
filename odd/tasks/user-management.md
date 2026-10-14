@@ -84,6 +84,7 @@ Out of scope: email sending, invite storage, and billing changes.
   - Type-check: `NODE_OPTIONS=--max-old-space-size=8192 pnpm exec tsc -p apps/backend/tsconfig.build.json --noEmit` → exit 0, 0 errors (the default heap aborts with OOM in this environment).
   - `DATABASE_URL=<dummy> pnpm exec prisma validate --schema ./libraries/nestjs-libraries/src/database/prisma/schema.prisma` → schema valid.
   - Frontend gap for T4: LOCAL register shows "Email domain not allowed" under the email field. After Google the register form hides the email input, so the 400 message is set on a hidden field and is not visible.
+- 2026-10-14 T1 correction (review finding R1-unverified-email-default-org-join, CRITICAL). While the allowlist is active, LOCAL self-registration is rejected with "Registration with email and password is disabled; ask an administrator for an account". Only a provider-verified email (Google `verified_email`) may join the default org; Google with an unverified email is rejected; providers without the flag fall back to a new org. RED 13 failed / 45 passed of 58 → GREEN 58/58 (`pnpm exec jest --config apps/backend/jest.config.cjs`, 5 suites); tsc (8 GB heap) exit 0, 0 errors.
 
 ## Next step
 

@@ -138,6 +138,7 @@ describe('InstanceSettingsService', () => {
       });
       await expect(service.getRegistrationPolicy('a@gmail.com')).resolves.toEqual({
         allowed: true,
+        restricted: false,
         defaultOrganizationId: null,
       });
     });
@@ -149,6 +150,7 @@ describe('InstanceSettingsService', () => {
       });
       await expect(service.getRegistrationPolicy('a@laica.io')).resolves.toEqual({
         allowed: true,
+        restricted: true,
         defaultOrganizationId: 'org-1',
       });
     });
@@ -161,6 +163,7 @@ describe('InstanceSettingsService', () => {
       repository.getActiveOrganization.mockResolvedValue(null);
       await expect(service.getRegistrationPolicy('a@laica.io')).resolves.toEqual({
         allowed: true,
+        restricted: true,
         defaultOrganizationId: null,
       });
     });
@@ -172,6 +175,7 @@ describe('InstanceSettingsService', () => {
       });
       await expect(service.getRegistrationPolicy('a@gmail.com')).resolves.toEqual({
         allowed: false,
+        restricted: true,
         defaultOrganizationId: null,
       });
     });

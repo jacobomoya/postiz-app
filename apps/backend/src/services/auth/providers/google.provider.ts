@@ -58,6 +58,8 @@ export class GoogleProvider extends AuthProviderAbstract {
     return {
       id: data.id!,
       email: data.email!,
+      // Google only marks an address verified when the account owns it.
+      emailVerified: data.verified_email === true,
     };
   }
 }

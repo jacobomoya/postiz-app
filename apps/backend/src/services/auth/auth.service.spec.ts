@@ -22,7 +22,14 @@ jest.mock('@gitroom/helpers/auth/auth.service', () => ({
   },
 }));
 
-type Policy = { allowed: boolean; defaultOrganizationId: string | null };
+type Policy = {
+  allowed: boolean;
+  restricted: boolean;
+  defaultOrganizationId: string | null;
+};
+
+const LOCAL_CLOSED =
+  'Registration with email and password is disabled; ask an administrator for an account';
 
 describe('AuthService allowed email domains', () => {
   const users = {
@@ -83,8 +90,9 @@ describe('AuthService allowed email domains', () => {
     providerInstance.getUser.mockResolvedValue({
       id: 'google-id',
       email: 'ana@laica.io',
+      emailVerified: true,
     });
-    policy({ allowed: true, defaultOrganizationId: null });
+    policy({ allowed: true, restricted: false, defaultOrganizationId: null });
   });
 
   describe('empty allowlist (open, as today)', () => {
@@ -119,6 +127,16 @@ describe('AuthService allowed email domains', () => {
       );
     });
 
+    it('provider register ignores an unverified email, as today', async () => {
+      providerInstance.getUser.mockResolvedValue({
+        id: 'g3',
+        email: 'a@gmail.com',
+        emailVerified: false,
+      });
+      await service.routeAuth('GOOGLE', providerRegister(), 'ip', 'agent');
+      expect(orgs.createOrgAndUser).toHaveBeenCalledTimes(1);
+    });
+
     it('still honours DISABLE_REGISTRATION', async () => {
       process.env.DISABLE_REGISTRATION = 'true';
       await expect(
@@ -129,12 +147,14 @@ describe('AuthService allowed email domains', () => {
   });
 
   describe('disallowed domain', () => {
-    beforeEach(() => policy({ allowed: false, defaultOrganizationId: null }));
+    beforeEach(() =>
+      policy({ allowed: false, restricted: true, defaultOrganizationId: null })
+    );
 
     it('rejects a LOCAL register', async () => {
       await expect(
         service.routeAuth('LOCAL', localRegister('a@gmail.com'), 'ip', 'agent')
-      ).rejects.toThrow('Email domain not allowed');
+      ).rejects.toThrow(LOCAL_CLOSED);
       expect(orgs.createOrgAndUser).not.toHaveBeenCalled();
       expect(orgs.createUserInOrg).not.toHaveBeenCalled();
       expect(email.sendEmailSync).not.toHaveBeenCalled();
@@ -143,7 +163,7 @@ describe('AuthService allowed email domains', () => {
     it('rejects a LOCAL register even with an invite cookie', async () => {
       await expect(
         service.routeAuth('LOCAL', localRegister('a@gmail.com'), 'ip', 'agent', invite)
-      ).rejects.toThrow('Email domain not allowed');
+      ).rejects.toThrow(LOCAL_CLOSED);
       expect(orgs.addUserToOrg).not.toHaveBeenCalled();
     });
 
@@ -187,28 +207,27 @@ describe('AuthService allowed email domains', () => {
   });
 
   describe('allowed domain with a default organization', () => {
-    beforeEach(() => policy({ allowed: true, defaultOrganizationId: 'default-org' }));
+    beforeEach(() =>
+      policy({ allowed: true, restricted: true, defaultOrganizationId: 'default-org' })
+    );
 
-    it('LOCAL register joins the default org as USER and creates no org', async () => {
-      const result = await service.routeAuth(
-        'LOCAL',
-        localRegister('ana@laica.io'),
-        'ip',
-        'agent'
-      );
-      expect(orgs.createUserInOrg).toHaveBeenCalledWith(
-        expect.objectContaining({ email: 'ana@laica.io', provider: 'LOCAL' }),
-        'default-org',
-        'USER',
-        'ip',
-        'agent'
-      );
+    it('rejects LOCAL self-registration, even for an allowed domain', async () => {
+      await expect(
+        service.routeAuth('LOCAL', localRegister('ana@laica.io'), 'ip', 'agent')
+      ).rejects.toThrow(LOCAL_CLOSED);
+      expect(orgs.createUserInOrg).not.toHaveBeenCalled();
       expect(orgs.createOrgAndUser).not.toHaveBeenCalled();
-      expect(email.sendEmailSync).toHaveBeenCalled();
-      expect(result).toEqual({ addedOrg: false, jwt: 'signed-jwt' });
+      expect(email.sendEmailSync).not.toHaveBeenCalled();
     });
 
-    it('provider register joins the default org as USER and creates no org', async () => {
+    it('rejects LOCAL self-registration with an invite cookie', async () => {
+      await expect(
+        service.routeAuth('LOCAL', localRegister('ana@laica.io'), 'ip', 'agent', invite)
+      ).rejects.toThrow(LOCAL_CLOSED);
+      expect(orgs.addUserToOrg).not.toHaveBeenCalled();
+    });
+
+    it('a provider user with a verified email joins the default org as USER', async () => {
       await service.routeAuth('GOOGLE', providerRegister(), 'ip', 'agent');
       expect(orgs.createUserInOrg).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -226,10 +245,30 @@ describe('AuthService allowed email domains', () => {
       expect(providerInstance.postRegistration).not.toHaveBeenCalled();
     });
 
-    it('keeps the invite behaviour when an invite cookie is present', async () => {
+    it('rejects a provider user whose email is not verified', async () => {
+      providerInstance.getUser.mockResolvedValue({
+        id: 'g4',
+        email: 'ana@laica.io',
+        emailVerified: false,
+      });
+      await expect(
+        service.routeAuth('GOOGLE', providerRegister(), 'ip', 'agent')
+      ).rejects.toThrow('Email domain not allowed');
+      expect(orgs.createUserInOrg).not.toHaveBeenCalled();
+      expect(orgs.createOrgAndUser).not.toHaveBeenCalled();
+    });
+
+    it('a provider without a verified flag does not join the default org', async () => {
+      providerInstance.getUser.mockResolvedValue({ id: 'gh1', email: 'ana@laica.io' });
+      await service.routeAuth('GITHUB' as any, providerRegister(), 'ip', 'agent');
+      expect(orgs.createUserInOrg).not.toHaveBeenCalled();
+      expect(orgs.createOrgAndUser).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps the invite behaviour for a verified provider user', async () => {
       const result = await service.routeAuth(
-        'LOCAL',
-        localRegister('ana@laica.io'),
+        'GOOGLE',
+        providerRegister(),
         'ip',
         'agent',
         invite
@@ -247,11 +286,10 @@ describe('AuthService allowed email domains', () => {
   });
 
   describe('allowed domain without a default organization', () => {
-    it('falls back to createOrgAndUser', async () => {
-      policy({ allowed: true, defaultOrganizationId: null });
-      await service.routeAuth('LOCAL', localRegister('ana@laica.io'), 'ip', 'agent');
+    it('falls back to createOrgAndUser for a provider user', async () => {
+      policy({ allowed: true, restricted: true, defaultOrganizationId: null });
       await service.routeAuth('GOOGLE', providerRegister(), 'ip', 'agent');
-      expect(orgs.createOrgAndUser).toHaveBeenCalledTimes(2);
+      expect(orgs.createOrgAndUser).toHaveBeenCalledTimes(1);
       expect(orgs.createUserInOrg).not.toHaveBeenCalled();
     });
   });

@@ -16,6 +16,8 @@ export interface UpdateInstanceSettingsInput {
 export interface RegistrationPolicy {
   // Whether a new account may be created for this email.
   allowed: boolean;
+  // Whether the domain allowlist is active (non-empty).
+  restricted: boolean;
   // Organization the new user must join as USER, or null to create a new org.
   defaultOrganizationId: string | null;
 }
@@ -114,12 +116,14 @@ export class InstanceSettingsService {
     const { allowedEmailDomains, defaultOrganizationId } =
       await this.getSettings();
 
+    const restricted = allowedEmailDomains.length > 0;
+
     if (!isDomainAllowed(email, allowedEmailDomains)) {
-      return { allowed: false, defaultOrganizationId: null };
+      return { allowed: false, restricted, defaultOrganizationId: null };
     }
 
-    if (!allowedEmailDomains.length || !defaultOrganizationId) {
-      return { allowed: true, defaultOrganizationId: null };
+    if (!restricted || !defaultOrganizationId) {
+      return { allowed: true, restricted, defaultOrganizationId: null };
     }
 
     const organization = await this._repository.getActiveOrganization(
@@ -127,6 +131,7 @@ export class InstanceSettingsService {
     );
     return {
       allowed: true,
+      restricted,
       defaultOrganizationId: organization ? organization.id : null,
     };
   }
