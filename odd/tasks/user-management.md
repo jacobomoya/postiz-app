@@ -59,7 +59,7 @@ Out of scope: email sending, invite storage, and billing changes.
   - Unit tests.
   - Route: delegated (multi-file, new logic).
 - [ ] **T2 — Server-side role enforcement for `/settings/team*` (backend).** ADMIN/SUPERADMIN role required regardless of Stripe, plus tests. Route: delegated.
-- [ ] **T3 — Admin users API (backend).**
+- [x] **T3 — Admin users API (backend).**
   - Super-admin-only endpoints: list users, create user (email/password/org/role), set password, change membership role, enable/disable membership, toggle super-admin, activate/deactivate user, get/update allowed domains + default org.
   - DTO validation and unit tests.
   - Route: delegated.
@@ -85,6 +85,14 @@ Out of scope: email sending, invite storage, and billing changes.
   - `DATABASE_URL=<dummy> pnpm exec prisma validate --schema ./libraries/nestjs-libraries/src/database/prisma/schema.prisma` → schema valid.
   - Frontend gap for T4: LOCAL register shows "Email domain not allowed" under the email field. After Google the register form hides the email input, so the 400 message is set on a hidden field and is not visible.
 - 2026-10-14 T1 correction (review finding R1-unverified-email-default-org-join, CRITICAL). While the allowlist is active, LOCAL self-registration is rejected with "Registration with email and password is disabled; ask an administrator for an account". Only a provider-verified email (Google `verified_email`) may join the default org; Google with an unverified email is rejected; providers without the flag fall back to a new org. RED 13 failed / 45 passed of 58 → GREEN 58/58 (`pnpm exec jest --config apps/backend/jest.config.cjs`, 5 suites); tsc (8 GB heap) exit 0, 0 errors.
+
+- 2026-10-14 T3 (route: delegated, multi-file new logic). Branch `feat/admin-users-api` (from T1 `a243c12`), one work-unit commit (hash in the PR / follow-up doc update).
+  - New `AdminUsersController` under `/admin` (super-admin only, plain `ForbiddenException` 403), `AdminUsersService` + `AdminUsersRepository` in `nestjs-libraries/.../admin-users/`, DTOs in `dtos/admin/admin-users.dto.ts`. No schema change.
+  - Routes: `GET/POST /admin/users`, `PUT /admin/users/:id/password`, `PUT /admin/users/:id/memberships/:orgId`, `POST /admin/users/:id/memberships`, `PUT /admin/users/:id`, `GET/PUT /admin/settings/registration`, `GET /admin/organizations`.
+  - Decisions: `createUserInOrg` not reused (it ties `activated` to the email provider and only allows USER/ADMIN), so the repository creates an activated LOCAL user directly; no domain allowlist on admin create; emails stored trimmed and lower-cased; password 8-72 chars (bcrypt limit); `page` is 0-based like `/admin/errors`; last-SUPERADMIN-per-org and last-active-super-admin checks are check-then-write (no transaction).
+  - RED: 55 failed / 18 passed of 73 new tests (the 18 passing are route metadata + DTO validation, already met by the decorated stubs). GREEN: `pnpm exec jest --config apps/backend/jest.config.cjs` → 7 suites, 131 tests passed.
+  - Type-check: `NODE_OPTIONS=--max-old-space-size=8192 pnpm exec tsc -p apps/backend/tsconfig.build.json --noEmit` → exit 0, 0 errors.
+  - Size: about 714 production + 578 test lines, above the 400-line heuristic; kept as one unit because the endpoints share one service and guard and splitting would leave a half-usable API for T4.
 
 ## Next step
 
