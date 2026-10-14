@@ -24,6 +24,7 @@ import dynamic from 'next/dynamic';
 import { WalletUiProvider } from '@gitroom/frontend/components/auth/providers/placeholder/wallet.ui.provider';
 import { useT } from '@gitroom/react/translation/get.transation.service.client';
 import useCookie from 'react-use-cookie';
+import { RegisterFormError } from '@gitroom/frontend/components/auth/register.form.error';
 const WalletProvider = dynamic(
   () => import('@gitroom/frontend/components/auth/providers/wallet.provider'),
   {
@@ -220,6 +221,7 @@ export function RegisterAfter({
                   type="text"
                   placeholder={t('label_company', 'Company')}
                 />
+                <RegisterFormError emailHidden={isAfterProvider} />
               </div>
               <div className={clsx('text-[12px]')}>
                 {t(
