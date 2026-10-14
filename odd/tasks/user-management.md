@@ -63,7 +63,7 @@ Out of scope: email sending, invite storage, and billing changes.
   - Super-admin-only endpoints: list users, create user (email/password/org/role), set password, change membership role, enable/disable membership, toggle super-admin, activate/deactivate user, get/update allowed domains + default org.
   - DTO validation and unit tests.
   - Route: delegated.
-- [ ] **T4 — Admin "Users" UI (frontend).** `/(site)/admin/users` page with the list, create-user modal, row actions and a domains settings card, linked where the other admin pages are linked, plus component tests. Route: delegated.
+- [x] **T4 — Admin "Users" UI (frontend).** `/(site)/admin/users` page with the list, create-user modal, row actions and a domains settings card, linked where the other admin pages are linked, plus component tests. Route: delegated.
 - [ ] **T5 — Release.** PR(s) → merge to `main` → image build → redeploy Postbiz. Set `isSuperAdmin` for jacobo@solucionia.ai, configure the domains (solucionia.ai, laica.io, vetmonitor.ai) and the default org "Solucionia", and verify end-to-end. Route: inline (ops).
 
 ## Acceptance criteria
@@ -93,6 +93,17 @@ Out of scope: email sending, invite storage, and billing changes.
   - RED: 55 failed / 18 passed of 73 new tests (the 18 passing are route metadata + DTO validation, already met by the decorated stubs). GREEN: `pnpm exec jest --config apps/backend/jest.config.cjs` → 7 suites, 131 tests passed.
   - Type-check: `NODE_OPTIONS=--max-old-space-size=8192 pnpm exec tsc -p apps/backend/tsconfig.build.json --noEmit` → exit 0, 0 errors.
   - Size: about 714 production + 578 test lines, above the 400-line heuristic; kept as one unit because the endpoints share one service and guard and splitting would leave a half-usable API for T4.
+
+- 2026-10-14 T4 (route: T4: delegated, multi-file UI). Branch `feat/admin-users-ui` (from T3 `f7dbe9b`), one work-unit commit.
+  - Page `/admin/users` (`apps/frontend/src/app/(app)/(site)/admin/users/page.tsx`), linked from the super-admin bar in `layout/impersonate.tsx` ("View Users", next to "View Errors"/"View Stats").
+  - Components in `components/admin/`: `admin-users.api.ts` (types, SWR hooks, error reader, domain normalisation), `admin-users.component.tsx` (gating, debounced search, pagination, action errors), `admin-users.table.tsx` (table, membership chips with role select + enable/disable, set-password and add-membership forms), `admin-create-user.form.tsx`, `admin-registration-settings.tsx`. Confirmations use the existing `deleteDialog`; forms open through `useModals().openModal`.
+  - Hidden-error fix: `components/auth/register.form.error.tsx` renders the email error at form level when the email input is hidden after OAuth.
+  - i18n: the admin pages do not use `t()` (errors/stats are plain English), so only the new admin-bar link uses `t('view_users', 'View Users')`; no locale files changed (existing admin-bar keys are not in locales either).
+  - RED: 15 failed / 2 passed of 17 new tests with empty component stubs (the 2 passing are "renders nothing" negatives). GREEN: `pnpm exec jest --config apps/frontend/jest.config.ts` → 10 suites, 61 tests passed (44 existing + 17 new).
+  - Type-check: `NODE_OPTIONS=--max-old-space-size=8192 pnpm exec tsc -p apps/frontend/tsconfig.json --noEmit` → exit 0, 0 errors.
+  - Build: `NODE_OPTIONS=--max-old-space-size=8192 pnpm --filter ./apps/frontend run build` → exit 0; route `ƒ /admin/users` listed.
+  - Test setup: `var/test-setup-canvas-stub.sh` cds two levels above `var/`, i.e. outside the repo; it was run with its `cd` pointed at the repo root.
+  - Size: about 1,050 production + 306 test lines, above the 400-line heuristic; kept as one unit because the page, table, forms and settings card share one API module and splitting would ship a half-usable page.
 
 ## Next step
 
