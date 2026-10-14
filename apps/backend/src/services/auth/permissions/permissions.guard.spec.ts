@@ -4,12 +4,25 @@ import { Reflector } from '@nestjs/core';
 import { PoliciesGuard } from './permissions.guard';
 import { PermissionsService } from './permissions.service';
 import { SettingsController } from '@gitroom/backend/api/routes/settings.controller';
+import { OAuthAppController } from '@gitroom/backend/api/routes/oauth-app.controller';
+import { UsersController } from '@gitroom/backend/api/routes/users.controller';
+import { BillingController } from '@gitroom/backend/api/routes/billing.controller';
 
 jest.mock('@gitroom/nestjs-libraries/database/prisma/organizations/organization.service', () => ({}));
 jest.mock('@gitroom/nestjs-libraries/database/prisma/subscriptions/subscription.service', () => ({}));
 jest.mock('@gitroom/nestjs-libraries/database/prisma/posts/posts.service', () => ({}));
 jest.mock('@gitroom/nestjs-libraries/database/prisma/integrations/integration.service', () => ({}));
 jest.mock('@gitroom/nestjs-libraries/database/prisma/webhooks/webhooks.service', () => ({}));
+jest.mock('@gitroom/nestjs-libraries/database/prisma/prisma.service', () => ({}));
+jest.mock('@gitroom/nestjs-libraries/database/prisma/oauth/oauth.service', () => ({}));
+jest.mock('@gitroom/nestjs-libraries/database/prisma/users/users.service', () => ({}));
+jest.mock('@gitroom/nestjs-libraries/database/prisma/notifications/notification.service', () => ({}));
+jest.mock('@gitroom/nestjs-libraries/services/payment/payment.service', () => ({}));
+jest.mock('@gitroom/nestjs-libraries/track/track.service', () => ({}));
+jest.mock('@gitroom/backend/services/auth/auth.service', () => ({}));
+jest.mock('@gitroom/helpers/auth/auth.service', () => ({}));
+// The custom forbidden filter imports middleware with infrastructure dependencies.
+jest.mock('@gitroom/nestjs-libraries/services/exception.filter', () => ({}));
 
 type Role = 'USER' | 'ADMIN' | 'SUPERADMIN';
 type TeamRoute = 'getTeam' | 'inviteTeamMember' | 'deleteTeamMember';
@@ -125,5 +138,75 @@ describe('PoliciesGuard team-management role enforcement', () => {
       getClass: () => SettingsController,
     } as unknown as ExecutionContext;
     await expect(guard.canActivate(context)).resolves.toBe(true);
+  });
+
+  describe('remaining admin-only routes', () => {
+    const adminRoutes: Array<[string, Function, string]> = [
+      ['GET /user/oauth-app', OAuthAppController, 'getApp'],
+      ['POST /user/oauth-app', OAuthAppController, 'createApp'],
+      ['PUT /user/oauth-app', OAuthAppController, 'updateApp'],
+      ['DELETE /user/oauth-app', OAuthAppController, 'deleteApp'],
+      ['POST /user/oauth-app/rotate-secret', OAuthAppController, 'rotateSecret'],
+      ['POST /user/api-key/rotate', UsersController, 'rotateApiKey'],
+      ['GET /user/subscription', UsersController, 'getSubscription'],
+      ['GET /user/subscription/tiers', UsersController, 'tiers'],
+      ['GET /billing/invoices', BillingController, 'getInvoices'],
+    ];
+
+    const runOn = (
+      controller: Function,
+      method: string,
+      role: Role,
+      isSuperAdmin = false
+    ) => {
+      const request = {
+        path: '/some/admin/route',
+        query: {},
+        user: { id: 'user-1', isSuperAdmin },
+        org: { id: 'org-1', createdAt: new Date(), users: [{ role }] },
+      };
+      const context = {
+        switchToHttp: () => ({ getRequest: () => request }),
+        getHandler: () => controller.prototype[method],
+        getClass: () => controller,
+      } as unknown as ExecutionContext;
+      return guard.canActivate(context);
+    };
+
+    beforeEach(() => {
+      delete process.env.STRIPE_PUBLISHABLE_KEY;
+    });
+
+    it.each(adminRoutes)(
+      'refuses a USER-role member on %s with 403 without Stripe',
+      async (_name, controller, method) => {
+        await expect(runOn(controller, method, 'USER')).rejects.toMatchObject({ status: 403 });
+      }
+    );
+
+    it.each(adminRoutes)(
+      'refuses a USER-role member on %s with 403 with Stripe',
+      async (_name, controller, method) => {
+        process.env.STRIPE_PUBLISHABLE_KEY = 'pk_test_dummy';
+        await expect(runOn(controller, method, 'USER')).rejects.toMatchObject({ status: 403 });
+      }
+    );
+
+    it.each(adminRoutes)('allows an ADMIN on %s', async (_name, controller, method) => {
+      await expect(runOn(controller, method, 'ADMIN')).resolves.toBe(true);
+    });
+
+    it.each(adminRoutes)(
+      'allows an instance super-admin impersonating a USER-role member on %s',
+      async (_name, controller, method) => {
+        await expect(runOn(controller, method, 'USER', true)).resolves.toBe(true);
+      }
+    );
+
+    it('leaves POST /settings/shortlink open to USER-role members (Global Settings UI)', async () => {
+      await expect(
+        runOn(SettingsController, 'updateShortlinkPreference', 'USER')
+      ).resolves.toBe(true);
+    });
   });
 });

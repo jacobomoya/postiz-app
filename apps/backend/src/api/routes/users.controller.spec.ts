@@ -15,6 +15,7 @@ jest.mock('@gitroom/helpers/auth/auth.service', () => ({}));
 jest.mock('@gitroom/nestjs-libraries/database/prisma/organizations/organization.service', () => ({}));
 jest.mock('@gitroom/backend/services/auth/permissions/permissions.ability', () => ({
   CheckPolicies: () => () => undefined,
+  RequireOrgRoles: () => () => undefined,
 }));
 jest.mock('@gitroom/nestjs-libraries/database/prisma/users/users.service', () => ({}));
 jest.mock('@gitroom/nestjs-libraries/track/track.service', () => ({}));
