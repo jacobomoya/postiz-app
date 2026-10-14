@@ -519,6 +519,36 @@ export class OrganizationRepository {
     });
   }
 
+  // Creates a user that joins an existing organization instead of getting a
+  // new one. Mirrors the user fields set by createOrgAndUser.
+  createUserInOrg(
+    body: Omit<CreateOrgUserDto, 'providerToken'> & { providerId?: string },
+    hasEmail: boolean,
+    orgId: string,
+    role: 'USER' | 'ADMIN',
+    ip: string,
+    userAgent: string
+  ) {
+    return this._user.model.user.create({
+      data: {
+        activated: body.provider !== 'LOCAL' || !hasEmail,
+        email: body.email,
+        password: body.password ? AuthService.hashPassword(body.password) : '',
+        providerName: body.provider,
+        providerId: body.providerId || '',
+        timezone: 0,
+        ip,
+        agent: userAgent,
+        organizations: {
+          create: {
+            role,
+            organizationId: orgId,
+          },
+        },
+      },
+    });
+  }
+
   getOrgByCustomerId(customerId: string) {
     return this._organization.model.organization.findFirst({
       where: {

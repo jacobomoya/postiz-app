@@ -45,6 +45,7 @@ model Organization {
   webhooks            Webhooks[]
   oauthApp            OAuthApp[]
   oauthAuthorizations OAuthAuthorization[]
+  instanceSettings    InstanceSettings[]
 
   @@index([apiKey])
   @@index([streakSince])
@@ -1837,4 +1838,17 @@ model Announcement {
   description String
   color       AnnouncementColor @default(INFO)
   createdAt   DateTime          @default(now())
+}
+
+// Instance-wide settings, stored as a single row with id "default".
+model InstanceSettings {
+  id                    String        @id @default("default")
+  // Lower-case email domains (no "@") allowed to self-register or register
+  // with an OAuth provider. An empty list keeps registration open.
+  allowedEmailDomains   String[]      @default([])
+  // Organization that new users from an allowed domain join as USER.
+  defaultOrganizationId String?
+  defaultOrganization   Organization? @relation(fields: [defaultOrganizationId], references: [id], onDelete: SetNull)
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
 }
