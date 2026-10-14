@@ -77,7 +77,7 @@ Out of scope: email sending, invite storage, and billing changes.
 ## Progress / evidence
 
 - 2026-10-14: explored the fork (no admin user list, no set-password, no role change, no allowlist; Stripe-less permission bypass). Doc created and branch created.
-- 2026-10-14 T1 (route: delegated, multi-file new logic). Branch `feat/user-mgmt-allowed-domains`, work-unit commit `f455db6` (amended only to record this hash).
+- 2026-10-14 T1 (route: delegated, multi-file new logic). Branch `feat/user-mgmt-allowed-domains`, work-unit commit `823eed5` (amended only to record this hash).
   - Schema apply mechanism: `prisma db push` at container start (`pnpm run pm2` → `pm2-run` → `prisma-db-push`); the repo has no migrations folder, so none was added. New model `InstanceSettings` (single row id `default`, `allowedEmailDomains String[]`, `defaultOrganizationId` → Organization, `onDelete: SetNull`).
   - RED: first run failed to load (module missing); with method stubs, 26 failed / 6 passed of 32 (the 6 passing are regression guards for unchanged behaviour: provider register w/o allowlist, DISABLE_REGISTRATION, existing provider/LOCAL login, invite, fallback).
   - GREEN: `pnpm exec jest --config apps/backend/jest.config.cjs` → 4 suites, 51 tests passed (32 new auth/settings tests + 1 controller test + 18 existing).
