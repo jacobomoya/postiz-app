@@ -58,13 +58,14 @@ Out of scope: email sending, invite storage, and billing changes.
   - Enforce it in `AuthService.routeAuth` (LOCAL register) and `loginOrRegisterProvider`. Reject disallowed domains; join the default org as USER instead of `createOrgAndUser`. An empty list keeps current behaviour.
   - Unit tests.
   - Route: delegated (multi-file, new logic).
-- [ ] **T2 — Server-side role enforcement for `/settings/team*` (backend).** ADMIN/SUPERADMIN role required regardless of Stripe, plus tests. Route: delegated.
+- [x] **T2 — Server-side role enforcement for `/settings/team*` (backend).** ADMIN/SUPERADMIN role required regardless of Stripe, plus tests. Route: delegated (isolated worktree).
+- [x] **T2b — Same enforcement on the remaining `Sections.ADMIN` routes** (oauth-app ×5, api-key rotate, subscription ×2, billing invoices). `POST /settings/shortlink` was deliberately left open (Global Settings is a USER-role screen). Approved by the user 2026-10-14. Route: delegated.
 - [x] **T3 — Admin users API (backend).**
   - Super-admin-only endpoints: list users, create user (email/password/org/role), set password, change membership role, enable/disable membership, toggle super-admin, activate/deactivate user, get/update allowed domains + default org.
   - DTO validation and unit tests.
   - Route: delegated.
 - [x] **T4 — Admin "Users" UI (frontend).** `/(site)/admin/users` page with the list, create-user modal, row actions and a domains settings card, linked where the other admin pages are linked, plus component tests. Route: delegated.
-- [ ] **T5 — Release.** PR(s) → merge to `main` → image build → redeploy Postbiz. Set `isSuperAdmin` for jacobo@solucionia.ai, configure the domains (solucionia.ai, laica.io, vetmonitor.ai) and the default org "Solucionia", and verify end-to-end. Route: inline (ops).
+- [x] **T5 — Release.** PR(s) → merge to `main` → image build → redeploy Postbiz. Set `isSuperAdmin` for jacobo@solucionia.ai, configure the domains (solucionia.ai, laica.io, vetmonitor.ai) and the default org "Solucionia", and verify end-to-end. Route: inline (ops).
 
 ## Acceptance criteria
 
@@ -105,6 +106,29 @@ Out of scope: email sending, invite storage, and billing changes.
   - Test setup: `var/test-setup-canvas-stub.sh` cds two levels above `var/`, i.e. outside the repo; it was run with its `cd` pointed at the repo root.
   - Size: about 1,050 production + 306 test lines, above the 400-line heuristic; kept as one unit because the page, table, forms and settings card share one API module and splitting would ship a half-usable page.
 
+- 2026-10-14 T2/T2b (route: delegated, isolated worktree `../postiz-app-worktrees/team-role-enforcement`). Commits `aca4dc6` and `7bb5715`. New `@RequireOrgRoles(...)` decorator, enforced by the global `PoliciesGuard` before the Stripe/CASL check; it uses Nest `ForbiddenException`. RED 6 failed → GREEN, then RED 18 failed → GREEN; final run 77/77 (`pnpm exec jest --config apps/backend/jest.config.cjs`, 2 suites); tsc (8 GB heap) 0 errors.
+- Native reviews (gentle-ai RDD), all approved and acknowledged:
+
+  | Task | Lineage | Notes |
+  |---|---|---|
+  | T1 (first pass) | `review-0d47ec9ce34a39f2` | Escalated CRITICAL R1-unverified-email-default-org-join, fixed in `a243c12` |
+  | T1 | `review-e993d76f489f8d86` | Approved |
+  | T2 | `review-117928652b5fb696` | Approved |
+  | T3 | `review-4bb0d66cdc4d5172` | Approved |
+  | T4 | `review-c154e86866c7729d` | Approved |
+
+- Delivery: stacked PRs to `main`, merged 2026-10-14 in this order: #9, #8, #10 (retargeted to main), #11 (retargeted to main). `main` = `89aa15a`. Size exceptions were noted on #8, #10 and #11, where the size comes mostly from tests.
+- 2026-10-14/15 T5 (route: inline, ops).
+  - Fork image build for `89aa15a`: the superseded runs were cancelled. The first attempt failed at the arm64 "Set up Docker Buildx" step with a registry HTTP 500 (transient); the rerun succeeded.
+  - Postbiz (Coolify service `i7syzisn9jk7tkiisyjodnoc` on apps-varias) restarted on the new image. `prisma db push` created `InstanceSettings`.
+  - Configured: `isSuperAdmin=true` for jacobo@solucionia.ai (GOOGLE user); allowed domains `solucionia.ai, laica.io, vetmonitor.ai`; default org `Solucionia`.
+  - Verified from the internet:
+    - `POST /api/auth/register` (LOCAL) returns 400 "Registration with email and password is disabled; ask an administrator for an account" for both an allowed and a disallowed domain, and no user is created;
+    - `GET /api/admin/users` without a session returns 401;
+    - the web returns 200.
+  - Pending human check: click through `/admin/users` in a browser as a super-admin. The forms are covered by jest but have not been used in a real browser yet.
+
 ## Next step
 
-Get the chain-strategy answer, then T1.
+- The user clicks through `/admin/users` on https://postbiz.solucionia.ai.
+- First Google login from laica.io / vetmonitor.ai accounts. The OAuth client is Internal, so those Workspaces are still blocked by Google until the client is made External, a console change the user has to make.
